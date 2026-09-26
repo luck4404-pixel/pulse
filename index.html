@@ -6,6 +6,7 @@
 <title>Pulse — share the moment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
   :root{
     --bg:#FAFAFA;
@@ -43,6 +44,11 @@
   }
   a{color:inherit;text-decoration:none;}
   button{font-family:inherit;cursor:pointer;}
+
+  /* ---------- Backend banner / toast ---------- */
+  .connect-banner{background:#1f2937;color:#fbbf24;padding:10px 16px;text-align:center;font-size:13px;display:none;}
+  .toast{position:fixed;bottom:78px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;z-index:600;opacity:0;transition:opacity .25s;pointer-events:none;max-width:82vw;text-align:center;}
+  .toast.show{opacity:1;}
 
   /* ---------- Top bar ---------- */
   .topbar{
@@ -150,11 +156,11 @@
   .action-btn.liked svg{fill:var(--like);stroke:var(--like);}
   .action-btn.saved svg{fill:var(--text);}
   .post-likes{padding:8px 14px 0;font-size:13.5px;font-weight:600;}
-  .post-caption{padding:6px 14px 0;font-size:14px;line-height:1.4;}
+  .post-caption{padding:6px 14px 0;font-size:14px;line-height:1.4;word-wrap:break-word;}
   .post-caption .cap-uname{font-weight:600;margin-right:6px;}
   .post-comments-link{padding:6px 14px 0;font-size:13.5px;color:var(--text-soft);background:none;border:none;display:block;}
   .post-comment-list{padding:4px 14px 0;}
-  .post-comment-list .c{font-size:13.5px;margin-bottom:3px;}
+  .post-comment-list .c{font-size:13.5px;margin-bottom:3px;word-wrap:break-word;}
   .post-comment-list .c b{font-weight:600;margin-right:6px;}
   .post-time{padding:8px 14px 4px;font-size:11px;color:var(--text-soft);letter-spacing:.2px;}
   .add-comment{
@@ -174,13 +180,13 @@
   .side-profile .n{color:var(--text-soft);font-size:13.5px;}
   .side-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
   .side-head span:first-child{color:var(--text-soft);font-weight:600;font-size:13.5px;}
-  .side-head button{background:none;border:none;font-size:12.5px;font-weight:600;color:var(--text);}
   .suggestion{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
   .suggestion .l{display:flex;align-items:center;gap:12px;}
   .suggestion img{width:32px;height:32px;border-radius:50%;object-fit:cover;}
   .suggestion .u{font-size:13px;font-weight:600;}
   .suggestion .n{font-size:12px;color:var(--text-soft);}
   .suggestion button{background:none;border:none;color:var(--accent-d);font-weight:600;font-size:12px;}
+  .suggestion button.following{color:var(--text);}
   .side-footer{margin-top:26px;font-size:11.5px;color:var(--text-faint);line-height:1.8;}
 
   /* ---------- Bottom nav (mobile) ---------- */
@@ -227,11 +233,17 @@
     width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);
     color:var(--text);padding:10px;font-family:inherit;font-size:14px;resize:none;min-height:70px;outline:none;
   }
+  .field-label{font-size:12.5px;color:var(--text-soft);display:block;margin-bottom:5px;margin-top:14px;}
+  .modal input[type="text"]{
+    width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);
+    color:var(--text);padding:10px;font-size:14px;outline:none;
+  }
   .share-btn{
     width:100%;margin-top:14px;padding:10px;border:none;border-radius:8px;
     background:var(--accent-d);color:#fff;font-weight:600;font-size:14px;
   }
   .share-btn:disabled{opacity:.4;cursor:default;}
+  .ghost-btn{background:none;border:none;color:var(--text-soft);font-size:13px;margin-top:14px;display:block;margin-left:auto;margin-right:auto;}
 
   /* post-viewer modal (reuses .post look, wider) */
   #post-modal .modal{max-width:480px;background:transparent;box-shadow:none;position:relative;}
@@ -280,8 +292,6 @@
   .explore-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
   .explore-grid .cell{aspect-ratio:1/1;overflow:hidden;background:var(--bg);position:relative;cursor:pointer;}
   .explore-grid .cell img{width:100%;height:100%;object-fit:cover;display:block;}
-  .explore-grid .cell .reel-flag{position:absolute;top:8px;right:8px;color:#fff;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6));}
-  .explore-grid .cell .reel-flag svg{width:16px;height:16px;}
 
   /* ---------- Reels ---------- */
   .reels-wrap{
@@ -302,7 +312,7 @@
   }
   .reel-overlay-bottom .u{font-weight:600;font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
   .reel-overlay-bottom .u img{width:26px;height:26px;border-radius:50%;object-fit:cover;}
-  .reel-overlay-bottom .cap{font-size:13px;opacity:.9;}
+  .reel-overlay-bottom .cap{font-size:13px;opacity:.9;word-wrap:break-word;}
   .reel-rail{
     position:absolute;right:10px;bottom:70px;display:flex;flex-direction:column;align-items:center;gap:18px;color:#fff;
   }
@@ -310,15 +320,16 @@
   .reel-rail svg{width:27px;height:27px;}
   .reel-rail .liked svg{fill:var(--like);stroke:var(--like);}
   .reel-rail .saved svg{fill:#fff;}
-  .reel-badge{position:absolute;top:14px;left:14px;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.35);padding:4px 9px;border-radius:20px;}
-  .reel-badge svg{width:13px;height:13px;}
 
   /* ---------- Messages ---------- */
   .msg-row{display:flex;align-items:center;gap:12px;padding:10px 4px;cursor:pointer;border-radius:10px;}
   .msg-row:hover{background:var(--surface);}
+  .av-wrap{position:relative;display:inline-flex;flex-shrink:0;}
+  .presence-dot{position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid var(--surface);display:none;z-index:2;}
+  .presence-dot.on{display:block;}
   .msg-row img{width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;}
   .msg-row .body{flex:1;min-width:0;}
-  .msg-row .u{font-size:14px;font-weight:600;}
+  .msg-row .u{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;}
   .msg-row .last{font-size:13px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
   .msg-row.unread .last{color:var(--text);font-weight:600;}
   .msg-row .dot{width:8px;height:8px;border-radius:50%;background:var(--accent-d);flex-shrink:0;}
@@ -327,7 +338,7 @@
   .chat-head img{width:34px;height:34px;border-radius:50%;object-fit:cover;}
   .chat-head .u{font-weight:600;font-size:14.5px;}
   .chat-thread{display:flex;flex-direction:column;gap:8px;padding:4px 2px 16px;min-height:260px;}
-  .bubble{max-width:75%;padding:9px 13px;border-radius:18px;font-size:14px;line-height:1.35;}
+  .bubble{max-width:75%;padding:9px 13px;border-radius:18px;font-size:14px;line-height:1.35;word-wrap:break-word;}
   .bubble.them{background:var(--surface);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px;}
   .bubble.me{background:var(--accent-d);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
   .chat-input-row{display:flex;gap:10px;align-items:center;position:sticky;bottom:0;background:var(--bg);padding:10px 0;}
@@ -345,25 +356,26 @@
   .notif-row .text b{font-weight:600;}
   .notif-row .time{color:var(--text-soft);}
   .notif-row .thumb{width:44px;height:44px;border-radius:4px;object-fit:cover;flex-shrink:0;}
-  .notif-row .follow-btn{background:var(--accent-d);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;flex-shrink:0;}
   .notif-icon{width:44px;height:44px;border-radius:50%;background:var(--ring);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .notif-icon svg{width:22px;height:22px;fill:#fff;}
 
   /* ---------- Profile page ---------- */
   .profile-header{display:flex;gap:34px;align-items:flex-start;padding:24px 6px;}
-  .profile-header img{width:90px;height:90px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+  .profile-header img.pfp{width:90px;height:90px;border-radius:50%;object-fit:cover;flex-shrink:0;}
   .profile-header h2{font-size:20px;font-weight:400;margin:0 0 12px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;}
   .profile-stats{display:flex;gap:26px;font-size:14px;margin-bottom:10px;}
   .profile-stats b{font-weight:600;}
-  .profile-bio{font-size:14px;line-height:1.4;}
+  .profile-bio{font-size:14px;line-height:1.4;word-wrap:break-word;}
   .profile-bio b{display:block;}
   .profile-tabs{display:flex;justify-content:center;gap:50px;border-top:1px solid var(--border);margin-top:20px;}
   .profile-tabs button{background:none;border:none;color:var(--text-soft);font-size:12px;font-weight:600;letter-spacing:.5px;padding:14px 0;border-top:1.5px solid transparent;margin-top:-1px;display:flex;align-items:center;gap:6px;}
   .profile-tabs button.active{color:var(--text);border-top-color:var(--text);}
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
-  .grid .cell{aspect-ratio:1/1;overflow:hidden;background:var(--bg);}
+  .grid .cell{aspect-ratio:1/1;overflow:hidden;background:var(--bg);cursor:pointer;}
   .grid .cell img{width:100%;height:100%;object-fit:cover;display:block;}
   .toggle-theme{background:none;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:6px;}
+  .primary-btn{background:var(--accent-d);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;flex-shrink:0;}
+  .logout-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:13px;color:var(--like);}
 
   .empty-note{text-align:center;padding:60px 20px;color:var(--text-soft);font-size:14px;}
 
@@ -376,6 +388,8 @@
 </style>
 </head>
 <body>
+
+<div class="connect-banner" id="connect-banner">Backend not connected yet — the site owner needs to add the Supabase project URL and key.</div>
 
 <div class="topbar">
   <div class="topbar-inner">
@@ -390,20 +404,20 @@
       </button>
       <button class="icon-btn" onclick="showView('messages')" title="Messages">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3 3 10.5l7 3 3 7L21 3Z"/></svg>
-        <span class="badge-dot" id="msg-dot"></span>
+        <span class="badge-dot" id="msg-dot" style="display:none;"></span>
       </button>
       <button class="icon-btn" onclick="openCreateModal('post')" title="New post">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       </button>
       <button class="icon-btn" onclick="showView('notifications')" title="Notifications">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6a5.5 5.5 0 0 0-9.3-4A5.5 5.5 0 0 0 2.7 11c1.6 4 8.8 9 9.3 9.3.5-.3 7.7-5.3 9.3-9.3.5-1 .5-1.7.5-2.4Z"/></svg>
-        <span class="badge-dot" id="notif-dot"></span>
+        <span class="badge-dot" id="notif-dot" style="display:none;"></span>
       </button>
       <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5Z"/></svg>
       </button>
       <button class="icon-btn avatar-btn" onclick="showView('profile')" title="Profile">
-        <img id="topbar-avatar" src="https://i.pravatar.cc/64?img=32" alt="">
+        <img id="topbar-avatar" src="" alt="">
       </button>
     </div>
   </div>
@@ -413,17 +427,17 @@
   <div class="main-col" id="main-col"></div>
   <div class="side-col" id="side-col">
     <div class="side-profile">
-      <img id="sidecol-avatar" src="https://i.pravatar.cc/112?img=32" alt="">
+      <img id="sidecol-avatar" src="" alt="">
       <div>
-        <div class="u" id="sidecol-uname">you.here</div>
-        <div class="n" id="sidecol-name">Your Name</div>
+        <div class="u" id="sidecol-uname"></div>
+        <div class="n" id="sidecol-name"></div>
       </div>
     </div>
-    <div class="side-head"><span>Suggested for you</span><button>See all</button></div>
+    <div class="side-head"><span>Recent people</span></div>
     <div id="suggestions"></div>
     <div class="side-footer">
       About · Help · Press · API · Jobs · Privacy · Terms<br>
-      © 2026 PULSE FROM CLAUDE
+      © 2026 PULSE — live
     </div>
   </div>
 </div>
@@ -433,7 +447,7 @@
   <button id="nav-explore" onclick="showView('explore')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
   <button onclick="openCreateModal('post')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></button>
   <button id="nav-reels" onclick="showView('reels')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7Z"/><path d="M7 6.5 9.5 3M14 6.5 17 3"/></svg></button>
-  <button id="nav-profile" onclick="showView('profile')"><img class="nav-avatar" id="bottomnav-avatar" src="https://i.pravatar.cc/64?img=32" alt=""></button>
+  <button id="nav-profile" onclick="showView('profile')"><img class="nav-avatar" id="bottomnav-avatar" src="" alt=""></button>
 </div>
 
 <!-- Create post / story modal -->
@@ -462,15 +476,17 @@
   <div class="modal">
     <div class="modal-head"><h3>Edit profile</h3><button onclick="closeEditProfile()">&times;</button></div>
     <div class="modal-body">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:18px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px;">
         <img id="ep-avatar-preview" src="" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">
         <button class="tab-btn" style="flex:none;padding:8px 16px;" onclick="document.getElementById('ep-file-input').click()">Change photo</button>
         <input type="file" id="ep-file-input" accept="image/*" style="display:none">
       </div>
-      <label style="font-size:12.5px;color:var(--text-soft);display:block;margin-bottom:5px;">Name</label>
-      <input id="ep-name-input" type="text" style="width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);padding:10px;font-size:14px;outline:none;margin-bottom:14px;">
-      <label style="font-size:12.5px;color:var(--text-soft);display:block;margin-bottom:5px;">Username</label>
-      <input id="ep-username-input" type="text" style="width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);padding:10px;font-size:14px;outline:none;">
+      <label class="field-label" style="margin-top:4px;">Name</label>
+      <input id="ep-name-input" type="text" placeholder="Your name">
+      <label class="field-label">Username</label>
+      <input id="ep-username-input" type="text" placeholder="username">
+      <label class="field-label">Bio</label>
+      <textarea id="ep-bio-input" placeholder="Tell people about yourself"></textarea>
       <button class="share-btn" onclick="saveProfile()">Save changes</button>
     </div>
   </div>
@@ -502,924 +518,39 @@
     <button class="sv-tap right" onclick="storyNext()"></button>
   </div>
   <div class="sv-foot">
-    <input placeholder="Send message" onkeydown="if(event.key==='Enter'){this.value='';storyNext();}">
-    <button title="Like">
+    <input id="sv-reply" placeholder="Reply to story..." onkeydown="if(event.key==='Enter')sendStoryReply()">
+    <button title="Like" onclick="storyLikeTap()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6a5.5 5.5 0 0 0-9.3-4A5.5 5.5 0 0 0 2.7 11c1.6 4 8.8 9 9.3 9.3.5-.3 7.7-5.3 9.3-9.3.5-1 .5-1.7.5-2.4Z"/></svg>
     </button>
   </div>
 </div>
 
 <!-- New user onboarding -->
-<div class="modal-overlay open" id="onboarding-overlay" style="z-index:400;">
+<div class="modal-overlay" id="onboarding-overlay" style="z-index:400;">
   <div class="modal" style="max-width:380px;">
     <div class="modal-body" style="text-align:center;padding-top:30px;">
       <div class="logo" style="font-size:26px;display:inline-block;margin-bottom:6px;">Pulse</div>
-      <p style="color:var(--text-soft);font-size:13.5px;margin:0 0 20px;">Set up your profile to get started</p>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:18px;">
+      <p style="color:var(--text-soft);font-size:13.5px;margin:0 0 20px;">Pick a username to get started — that's it, no password needed.</p>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px;">
         <div style="width:88px;height:88px;border-radius:50%;background:var(--ring);padding:3px;">
-          <img id="ob-avatar-preview" src="https://i.pravatar.cc/160?img=68" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">
+          <img id="ob-avatar-preview" src="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">
         </div>
-        <button class="tab-btn" style="flex:none;padding:7px 14px;" onclick="document.getElementById('ob-file-input').click()">Choose photo</button>
+        <button class="tab-btn" style="flex:none;padding:7px 14px;" onclick="document.getElementById('ob-file-input').click()">Choose photo (optional)</button>
         <input type="file" id="ob-file-input" accept="image/*" style="display:none">
       </div>
-      <input id="ob-name-input" type="text" placeholder="Your name" style="width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);padding:10px;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;">
-      <input id="ob-username-input" type="text" placeholder="Choose a username" style="width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);padding:10px;font-size:14px;outline:none;box-sizing:border-box;">
-      <button class="share-btn" onclick="finishOnboarding(false)">Continue</button>
-      <button style="background:none;border:none;color:var(--text-soft);font-size:13px;margin-top:14px;" onclick="finishOnboarding(true)">Skip for now</button>
+      <label class="field-label" style="text-align:left;">Name</label>
+      <input id="ob-name-input" type="text" placeholder="Your name">
+      <label class="field-label" style="text-align:left;">Username</label>
+      <input id="ob-username-input" type="text" placeholder="lowercase, 3-20 chars">
+      <label class="field-label" style="text-align:left;">Bio (optional)</label>
+      <input id="ob-bio-input" type="text" placeholder="Say something about you">
+      <button class="share-btn" id="ob-continue-btn" onclick="finishOnboarding(false)">Continue</button>
+      <button class="ghost-btn" onclick="finishOnboarding(true)">Skip for now</button>
     </div>
   </div>
 </div>
 
-<script>
-/* ---------------- Icons ---------------- */
-const heartOutline = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6a5.5 5.5 0 0 0-9.3-4A5.5 5.5 0 0 0 2.7 11c1.6 4 8.8 9 9.3 9.3.5-.3 7.7-5.3 9.3-9.3.5-1 .5-1.7.5-2.4Z"/></svg>';
-const heartFilled = '<svg viewBox="0 0 24 24"><path d="M12.1 21.3S3 15.5 3 9.9C3 6.6 5.5 4 8.6 4c1.9 0 3.2 1 3.5 1.4C12.4 5 13.7 4 15.6 4 18.7 4 21 6.6 21 9.9c0 5.6-8.9 11.4-8.9 11.4Z"/></svg>';
-const commentIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4A8.9 8.9 0 0 1 8 19L3 20l1.1-4.5A8.4 8.4 0 1 1 21 11.5Z"/></svg>';
-const shareIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
-const bookmarkOutline = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
-const bookmarkFilled = '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
-const moreIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>';
-const reelPlayIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7Z"/><path d="M7 6.5 9.5 3M14 6.5 17 3"/></svg>';
-const sendIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
-
-/* ---------------- State ---------------- */
-let theme = 'light';
-let currentView = 'feed';
-let pendingImage = null;
-let createTab = 'post';
-let exploreSearch = '';
-let postModalOpenId = null;
-let activeChatId = null;
-let dataReady = false;
-
-const ME = { u:'you.here', name:'Your Name', avatar:'https://i.pravatar.cc/112?img=32' };
-
-// meData holds everything private to the current Claude account (personal storage).
-let meData = {
-  profile: { name: ME.name, u: ME.u, avatar: ME.avatar },
-  likedPosts: [],      // post ids you've liked
-  savedPosts: [],      // post ids you've bookmarked
-  seenStories: [],     // usernames whose story you've viewed
-  myStoryItems: [],    // your own story photos: {img, time}
-  conversations: null, // filled from seed on first run
-  onboarded: false
-};
-
-const SEED_STORY_USERS = [
-  {u:'mira.k', avatar:'https://i.pravatar.cc/80?img=5', items:[
-    {img:'https://picsum.photos/id/1011/500/880', time:'2h'},
-    {img:'https://picsum.photos/id/1012/500/880', time:'1h'}
-  ]},
-  {u:'devon_r', avatar:'https://i.pravatar.cc/80?img=12', items:[
-    {img:'https://picsum.photos/id/1013/500/880', time:'3h'}
-  ]},
-  {u:'the.aisha', avatar:'https://i.pravatar.cc/80?img=25', items:[
-    {img:'https://picsum.photos/id/1016/500/880', time:'4h'},
-    {img:'https://picsum.photos/id/1018/500/880', time:'4h'}
-  ]},
-  {u:'noah.p', avatar:'https://i.pravatar.cc/80?img=15', items:[
-    {img:'https://picsum.photos/id/1020/500/880', time:'8h'}
-  ]},
-  {u:'lin_studio', avatar:'https://i.pravatar.cc/80?img=48', items:[
-    {img:'https://picsum.photos/id/1024/500/880', time:'10h'}
-  ]},
-  {u:'kofi.b', avatar:'https://i.pravatar.cc/80?img=33', items:[
-    {img:'https://picsum.photos/id/1035/500/880', time:'12h'}
-  ]},
-  {u:'rae_travels', avatar:'https://i.pravatar.cc/80?img=44', items:[
-    {img:'https://picsum.photos/id/1039/500/880', time:'1d'}
-  ]},
-];
-
-// storiesContent is shared across everyone using this app: { username: {avatar, items:[...]} }
-let storiesContent = {};
-
-const suggestionsData = [
-  {u:'wildtrail.co', n:'Followed by devon_r', img:'https://i.pravatar.cc/64?img=21'},
-  {u:'paperandpine', n:'New to Pulse', img:'https://i.pravatar.cc/64?img=41'},
-  {u:'kofi.b', n:'Followed by mira.k', img:'https://i.pravatar.cc/64?img=33'},
-  {u:'noah.p', n:'Suggested for you', img:'https://i.pravatar.cc/64?img=15'},
-];
-
-function mkPost(id,user,avatar,loc,img,caption,liked,saved,likes,comments,time,contexts){
-  return {id,user,avatar,loc,img,caption,liked,saved,likes,comments,time,contexts};
-}
-let posts = [];
-function seedPosts(){
-  return [
-    mkPost(4,'the.aisha','https://i.pravatar.cc/64?img=25','Lisbon, Portugal','https://picsum.photos/id/1015/700/700','Golden hour by the river. Needed this reset.',false,false,842,[{u:'devon_r',t:'this light though \ud83d\ude0d'},{u:'kofi.b',t:'take me with you next time'}],'2 HOURS AGO',['feed','explore']),
-    mkPost(3,'lin_studio','https://i.pravatar.cc/64?img=48','Studio, Kyoto','https://picsum.photos/id/1025/700/700','New print run just came off the press. Link in bio for the first ten.',false,false,1290,[{u:'rae_travels',t:'ordering right now'}],'5 HOURS AGO',['feed','explore']),
-    mkPost(2,'kofi.b','https://i.pravatar.cc/64?img=33','Accra, Ghana','https://picsum.photos/id/1043/700/700','Sunday market run. Best tomatoes in the city, no debate.',false,false,433,[],'1 DAY AGO',['feed','explore']),
-    mkPost(1,'noah.p','https://i.pravatar.cc/64?img=15','','https://picsum.photos/id/1062/700/700','Trail day. Legs are done, heart is full.',false,false,257,[{u:'the.aisha',t:'which trail?!'}],'2 DAYS AGO',['feed','explore']),
-    mkPost(101,'paperandpine','https://i.pravatar.cc/64?img=41','','https://picsum.photos/id/1027/700/700','Letterpress proofs drying in the sun.',false,false,318,[],'6 HOURS AGO',['explore']),
-    mkPost(102,'wildtrail.co','https://i.pravatar.cc/64?img=21','Banff, Canada','https://picsum.photos/id/1036/700/700','Ridge line views for days.',false,false,974,[{u:'noah.p',t:'bucket list spot'}],'8 HOURS AGO',['explore']),
-    mkPost(103,'rae_travels','https://i.pravatar.cc/64?img=44','Marrakech','https://picsum.photos/id/1041/700/700','Lost in the souks (happily).',false,false,612,[],'10 HOURS AGO',['explore']),
-    mkPost(104,'devon_r','https://i.pravatar.cc/64?img=12','','https://picsum.photos/id/1044/700/700','Studio scraps, day 40.',false,false,201,[],'12 HOURS AGO',['explore']),
-    mkPost(105,'mira.k','https://i.pravatar.cc/64?img=5','Copenhagen','https://picsum.photos/id/1050/700/700','Bike lanes better than back home, fight me.',false,false,455,[],'14 HOURS AGO',['explore']),
-    mkPost(106,'the.aisha','https://i.pravatar.cc/64?img=25','','https://picsum.photos/id/1053/700/700','Coffee before anything else.',false,false,189,[],'15 HOURS AGO',['explore']),
-    mkPost(107,'lin_studio','https://i.pravatar.cc/64?img=48','','https://picsum.photos/id/1059/700/700','Glaze test #12. Getting closer.',false,false,340,[],'18 HOURS AGO',['explore']),
-    mkPost(108,'kofi.b','https://i.pravatar.cc/64?img=33','','https://picsum.photos/id/1060/700/700','Late night city walk.',false,false,278,[],'1 DAY AGO',['explore']),
-    mkPost(109,'noah.p','https://i.pravatar.cc/64?img=15','Dolomites','https://picsum.photos/id/1067/700/700','Weather turned fast up there.',false,false,890,[],'1 DAY AGO',['explore']),
-    mkPost(201,'rae_travels','https://i.pravatar.cc/64?img=44','','https://picsum.photos/id/1074/700/1200','48 hours in the desert \ud83c\udfdc\ufe0f',false,false,3200,[{u:'devon_r',t:'need this trip'}],'',['reel']),
-    mkPost(202,'kofi.b','https://i.pravatar.cc/64?img=33','','https://picsum.photos/id/1080/700/1200','Market sounds hit different at 6am',false,false,1840,[],'',['reel']),
-    mkPost(203,'lin_studio','https://i.pravatar.cc/64?img=48','','https://picsum.photos/id/1084/700/1200','Throwing a bowl start to finish',false,false,5210,[{u:'mira.k',t:'so satisfying'}],'',['reel']),
-    mkPost(204,'the.aisha','https://i.pravatar.cc/64?img=25','','https://picsum.photos/id/1069/700/1200','Golden hour, every time \u2600\ufe0f',false,false,2670,[],'',['reel']),
-    mkPost(205,'mira.k','https://i.pravatar.cc/64?img=5','','https://picsum.photos/id/1076/700/1200','Cold plunge, warm coffee',false,false,980,[],'',['reel']),
-  ];
-}
-function postsIn(ctx){ return posts.filter(p=>p.contexts.includes(ctx)); }
-function findPost(id){ return posts.find(p=>p.id===id); }
-
-function seedConversations(){
-  return [
-    {id:1, u:'mira.k', avatar:'https://i.pravatar.cc/64?img=5', unread:true, messages:[
-      {from:'them', t:'hey! loved the river shot'},
-      {from:'them', t:'what camera did you use?'}
-    ]},
-    {id:2, u:'devon_r', avatar:'https://i.pravatar.cc/64?img=12', unread:true, messages:[
-      {from:'them', t:'still on for saturday?'}
-    ]},
-    {id:3, u:'lin_studio', avatar:'https://i.pravatar.cc/64?img=48', unread:false, messages:[
-      {from:'me', t:'just ordered the mugs!'},
-      {from:'them', t:'ah amazing, thank you \ud83d\ude4f'}
-    ]},
-    {id:4, u:'kofi.b', avatar:'https://i.pravatar.cc/64?img=33', unread:false, messages:[
-      {from:'them', t:'that market post was so good'},
-      {from:'me', t:'right?? going back next sunday'}
-    ]},
-  ];
-}
-let conversations = [];
-const cannedReplies = ["haha for real", "yes exactly!", "let's plan it out", "sending you the link now", "\ud83d\ude02\ud83d\ude02", "can't wait", "no way, really?"];
-
-// A handful of evergreen sample notifications, shown alongside real activity on your own posts.
-const sampleNotifications = [
-  {type:'follow', u:'paperandpine', avatar:'https://i.pravatar.cc/64?img=41', text:'started following you.', time:'3h'},
-  {type:'follow', u:'wildtrail.co', avatar:'https://i.pravatar.cc/64?img=21', text:'started following you.', time:'2d'},
-];
-
-/* ---------------- Persistence (shared + personal storage) ---------------- */
-async function saveSharedPosts(){
-  try{ await window.storage.set('posts-v1', JSON.stringify(posts), true); }
-  catch(e){ console.error('save posts failed', e); }
-}
-async function saveSharedStories(){
-  try{ await window.storage.set('stories-v1', JSON.stringify(storiesContent), true); }
-  catch(e){ console.error('save stories failed', e); }
-}
-async function savePersonal(){
-  meData.profile = { name: ME.name, u: ME.u, avatar: ME.avatar };
-  meData.myStoryItems = (storiesContent[ME.u] && storiesContent[ME.u].items) || [];
-  meData.conversations = conversations;
-  try{ await window.storage.set('me-data', JSON.stringify(meData), false); }
-  catch(e){ console.error('save personal data failed', e); }
-}
-
-async function loadAllData(){
-  // Shared posts
-  try{
-    const r = await window.storage.get('posts-v1', true);
-    posts = r && r.value ? JSON.parse(r.value) : seedPosts();
-  }catch(e){ posts = seedPosts(); }
-  if(!posts || !posts.length){ posts = seedPosts(); }
-
-  // Shared stories
-  try{
-    const r = await window.storage.get('stories-v1', true);
-    storiesContent = r && r.value ? JSON.parse(r.value) : null;
-  }catch(e){ storiesContent = null; }
-  if(!storiesContent){
-    storiesContent = {};
-    SEED_STORY_USERS.forEach(s=>{ storiesContent[s.u] = {avatar:s.avatar, items:s.items}; });
-    saveSharedStories();
-  }
-
-  // Personal data
-  try{
-    const r = await window.storage.get('me-data', false);
-    if(r && r.value) meData = Object.assign(meData, JSON.parse(r.value));
-  }catch(e){ /* first time visitor, defaults stand */ }
-
-  if(meData.profile){
-    ME.name = meData.profile.name || ME.name;
-    ME.u = meData.profile.u || ME.u;
-    ME.avatar = meData.profile.avatar || ME.avatar;
-  }
-  conversations = meData.conversations && meData.conversations.length ? meData.conversations : seedConversations();
-  if(meData.myStoryItems && meData.myStoryItems.length && !(storiesContent[ME.u] && storiesContent[ME.u].items.length)){
-    storiesContent[ME.u] = { avatar: ME.avatar, items: meData.myStoryItems };
-  }
-
-  // Apply personal liked/saved flags onto the shared posts
-  posts.forEach(p=>{
-    p.liked = meData.likedPosts.includes(p.id);
-    p.saved = meData.savedPosts.includes(p.id);
-  });
-
-  dataReady = true;
-}
-
-/* ---------------- Rendering: stories ---------------- */
-function renderStories(){
-  const mineEntry = storiesContent[ME.u];
-  const mine = !!(mineEntry && mineEntry.items && mineEntry.items.length>0);
-  const others = Object.keys(storiesContent).filter(u=>u!==ME.u);
-  return '<div class="stories">' +
-    '<button class="story" onclick="'+(mine?"openStoryViewer('"+ME.u+"')":"openCreateModal('story')")+'">' +
-      '<div class="story-ring '+(mine?'':'empty')+'" style="position:relative">' +
-        '<div class="story-ring-inner"><img src="'+ME.avatar+'"></div>' +
-        '<div class="plus-badge" onclick="event.stopPropagation();openCreateModal(\'story\')">+</div>' +
-      '</div>' +
-      '<span>Your story</span>' +
-    '</button>' +
-    others.map(u=>{
-      const s = storiesContent[u];
-      const seen = meData.seenStories.includes(u);
-      return '<button class="story" onclick="openStoryViewer(\''+u+'\')">' +
-        '<div class="story-ring '+(seen?'seen':'')+'">' +
-          '<div class="story-ring-inner"><img src="'+s.avatar+'"></div>' +
-        '</div>' +
-        '<span>'+u+'</span>' +
-      '</button>';
-    }).join('') +
-  '</div>';
-}
-
-/* ---------------- Rendering: post card ---------------- */
-function renderPost(p){
-  const showAllComments = p.commentsExpanded;
-  const commentsToShow = showAllComments ? p.comments : p.comments.slice(-2);
-  return '' +
-  '<div class="post" id="post-'+p.id+'">' +
-    '<div class="post-head">' +
-      '<div class="post-user" style="cursor:pointer" onclick="viewProfile(\''+p.user+'\')">' +
-        '<img src="'+p.avatar+'">' +
-        '<div class="names">' +
-          '<span class="uname">'+p.user+'</span>' +
-          (p.loc? '<span class="loc">'+p.loc+'</span>':'') +
-        '</div>' +
-      '</div>' +
-      '<button class="more-btn" onclick="postMenu('+p.id+')">'+moreIcon+'</button>' +
-    '</div>' +
-    '<div class="post-media" ondblclick="likePost('+p.id+', true)">' +
-      '<img src="'+p.img+'" loading="lazy">' +
-      '<div class="burst" id="burst-'+p.id+'">'+heartFilled+'</div>' +
-    '</div>' +
-    '<div class="post-actions">' +
-      '<div class="action-left">' +
-        '<button class="action-btn '+(p.liked?'liked':'')+'" onclick="likePost('+p.id+')">'+(p.liked?heartFilled:heartOutline)+'</button>' +
-        '<button class="action-btn" onclick="focusComment('+p.id+')">'+commentIcon+'</button>' +
-        '<button class="action-btn">'+shareIcon+'</button>' +
-      '</div>' +
-      '<button class="action-btn '+(p.saved?'saved':'')+'" onclick="savePost('+p.id+')">'+(p.saved?bookmarkFilled:bookmarkOutline)+'</button>' +
-    '</div>' +
-    '<div class="post-likes">'+p.likes.toLocaleString()+' likes</div>' +
-    '<div class="post-caption"><span class="cap-uname" style="cursor:pointer" onclick="viewProfile(\''+p.user+'\')">'+p.user+'</span>'+p.caption+'</div>' +
-    (p.comments.length ? (
-      (!showAllComments && p.comments.length>2 ? '<button class="post-comments-link" onclick="expandComments('+p.id+')">View all '+p.comments.length+' comments</button>':'') +
-      '<div class="post-comment-list">' +
-        commentsToShow.map(c=>'<div class="c"><b style="cursor:pointer" onclick="viewProfile(\''+c.u+'\')">'+c.u+'</b>'+c.t+'</div>').join('') +
-      '</div>'
-    ):'') +
-    (p.time? '<div class="post-time">'+p.time+'</div>' : '<div style="height:6px"></div>') +
-    '<div class="add-comment">' +
-      '<input id="comment-input-'+p.id+'" placeholder="Add a comment..." oninput="toggleCommentBtn('+p.id+')">' +
-      '<button id="comment-btn-'+p.id+'" onclick="addComment('+p.id+')">Post</button>' +
-    '</div>' +
-  '</div>';
-}
-
-function expandComments(id){
-  const p = findPost(id);
-  p.commentsExpanded = true;
-  refresh();
-}
-
-function renderFeed(){
-  document.getElementById('main-col').innerHTML = renderStories() + postsIn('feed').map(renderPost).join('');
-}
-
-/* ---------------- Explore ---------------- */
-function onSearch(v, source){
-  exploreSearch = v;
-  const top = document.getElementById('search-top');
-  const inGrid = document.getElementById('explore-search-input');
-  if(top && top!==source) top.value = v;
-  if(inGrid && inGrid!==source) inGrid.value = v;
-  if(currentView==='explore'){
-    if(document.getElementById('explore-grid')) renderExploreGrid();
-    else renderExplore();
-  }
-}
-
-function renderExplore(){
-  document.getElementById('main-col').innerHTML =
-    '<div class="explore-search"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-    '<input id="explore-search-input" placeholder="Search" value="'+exploreSearch.replace(/"/g,'')+'" oninput="onSearch(this.value,this)"></div>' +
-    '<div class="explore-grid" id="explore-grid"></div>';
-  renderExploreGrid();
-}
-
-function renderExploreGrid(){
-  const term = exploreSearch.trim().toLowerCase();
-  let pool = posts.filter(p=>p.contexts.includes('explore')||p.contexts.includes('reel'));
-  if(term){
-    pool = pool.filter(p => p.user.toLowerCase().includes(term) || (p.caption||'').toLowerCase().includes(term));
-  }
-  document.getElementById('explore-grid').innerHTML =
-    (pool.length? pool.map(p=>
-      '<div class="cell" onclick="openPostModal('+p.id+')"><img src="'+p.img+'">' +
-      (p.contexts.includes('reel')? '<div class="reel-flag">'+reelPlayIcon+'</div>':'') +
-      '</div>'
-    ).join('') : '<div class="empty-note" style="grid-column:1/-1">No results for that search.</div>');
-}
-
-/* ---------------- Post modal (lightbox) ---------------- */
-function openPostModal(id){
-  postModalOpenId = id;
-  document.getElementById('post-modal-content').innerHTML = renderPost(findPost(id));
-  document.getElementById('post-modal').classList.add('open');
-}
-function closePostModal(){
-  postModalOpenId = null;
-  document.getElementById('post-modal').classList.remove('open');
-}
-
-/* ---------------- Reels ---------------- */
-function renderReels(){
-  const rl = postsIn('reel');
-  document.getElementById('main-col').innerHTML =
-    '<div class="reels-wrap">' +
-    rl.map(p=>
-      '<div class="reel">' +
-        '<img src="'+p.img+'">' +
-        '<div class="reel-badge">'+reelPlayIcon+' Reel</div>' +
-        '<div class="reel-overlay-bottom">' +
-          '<div class="u" style="cursor:pointer" onclick="viewProfile(\''+p.user+'\')"><img src="'+p.avatar+'">'+p.user+'</div>' +
-          '<div class="cap">'+p.caption+'</div>' +
-        '</div>' +
-        '<div class="reel-rail">' +
-          '<button class="'+(p.liked?'liked':'')+'" onclick="likePost('+p.id+')">'+(p.liked?heartFilled:heartOutline)+'<span>'+p.likes.toLocaleString()+'</span></button>' +
-          '<button onclick="openPostModal('+p.id+')">'+commentIcon+'<span>'+p.comments.length+'</span></button>' +
-          '<button>'+shareIcon+'<span>Share</span></button>' +
-          '<button class="'+(p.saved?'saved':'')+'" onclick="savePost('+p.id+')">'+(p.saved?bookmarkFilled:bookmarkOutline)+'</button>' +
-        '</div>' +
-      '</div>'
-    ).join('') +
-    '</div>';
-}
-
-/* ---------------- Messages ---------------- */
-function renderMessages(){
-  document.getElementById('main-col').innerHTML =
-    '<h2 style="font-size:18px;margin:10px 4px 6px;">Messages</h2>' +
-    conversations.map(c=>{
-      const last = c.messages[c.messages.length-1];
-      return '<div class="msg-row '+(c.unread?'unread':'')+'" onclick="openChat('+c.id+')">' +
-        '<img src="'+c.avatar+'">' +
-        '<div class="body"><div class="u">'+c.u+'</div><div class="last">'+(last.from==='me'?'You: ':'')+last.t+'</div></div>' +
-        (c.unread? '<div class="dot"></div>' : '') +
-      '</div>';
-    }).join('');
-  updateMsgDot();
-}
-
-function openChat(id){
-  activeChatId = id;
-  const c = conversations.find(x=>x.id===id);
-  c.unread = false;
-  renderChat();
-  updateMsgDot();
-  savePersonal();
-}
-
-function renderChat(){
-  const c = conversations.find(x=>x.id===activeChatId);
-  document.getElementById('main-col').innerHTML =
-    '<div class="chat-head">' +
-      '<button onclick="activeChatId=null;renderMessages()">' +
-        '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>' +
-      '</button>' +
-      '<img src="'+c.avatar+'"><span class="u">'+c.u+'</span>' +
-    '</div>' +
-    '<div class="chat-thread" id="chat-thread">' +
-      c.messages.map(m=>'<div class="bubble '+(m.from==='me'?'me':'them')+'">'+m.t+'</div>').join('') +
-    '</div>' +
-    '<div class="chat-input-row">' +
-      '<input id="chat-input" placeholder="Message..." onkeydown="if(event.key===\'Enter\')sendChat()">' +
-      '<button onclick="sendChat()">Send</button>' +
-    '</div>';
-}
-
-function sendChat(){
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if(!text) return;
-  const c = conversations.find(x=>x.id===activeChatId);
-  c.messages.push({from:'me', t:text});
-  input.value='';
-  renderChat();
-  savePersonal();
-  setTimeout(()=>{
-    c.messages.push({from:'them', t: cannedReplies[Math.floor(Math.random()*cannedReplies.length)]});
-    if(activeChatId===c.id) renderChat(); else c.unread = true;
-    updateMsgDot();
-    savePersonal();
-  }, 1100 + Math.random()*900);
-}
-
-function updateMsgDot(){
-  const any = conversations.some(c=>c.unread);
-  document.getElementById('msg-dot').style.display = any? 'block':'none';
-}
-
-function messageUser(username){
-  let c = conversations.find(x=>x.u===username);
-  if(!c){
-    const seed = posts.find(p=>p.user===username);
-    const storyEntry = storiesContent[username];
-    const avatar = (seed && seed.avatar) || (storyEntry && storyEntry.avatar) || 'https://i.pravatar.cc/64';
-    c = {id: Date.now(), u: username, avatar, unread:false, messages:[]};
-    conversations.unshift(c);
-    savePersonal();
-  }
-  showView('messages');
-  openChat(c.id);
-}
-
-/* ---------------- Notifications ---------------- */
-function renderNotifications(){
-  document.getElementById('notif-dot').style.display='none';
-  // Real, live activity computed from shared likes/comments on your own posts.
-  const mine = posts.filter(p=>p.user===ME.u);
-  const liveRows = [];
-  mine.forEach(p=>{
-    p.comments.filter(c=>c.u!==ME.u).forEach(c=>{
-      liveRows.push({type:'comment', u:c.u, avatar:'https://i.pravatar.cc/64', text:'commented: "'+c.t+'"', time:'', thumb:p.img});
-    });
-  });
-  const combined = liveRows.concat(sampleNotifications);
-  document.getElementById('main-col').innerHTML =
-    '<h2 style="font-size:18px;margin:10px 4px 14px;">Notifications</h2>' +
-    (liveRows.length ? '<div class="notif-section-label">On your posts</div>' : '') +
-    (combined.length ? combined.map(n=>{
-      const icon = n.type==='like'? heartFilled : n.type==='comment'? commentIcon : n.type==='mention'? commentIcon : null;
-      return '<div class="notif-row">' +
-        '<div style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer" onclick="viewProfile(\''+n.u+'\')">' +
-        (icon? '<div class="notif-icon">'+icon+'</div>' : '<img class="avt" src="'+n.avatar+'">') +
-        '<div class="text"><b>'+n.u+'</b> '+n.text+' <span class="time">'+n.time+'</span></div>' +
-        '</div>' +
-        (n.thumb? '<img class="thumb" src="'+n.thumb+'">' : (n.type==='follow'? '<button class="follow-btn" onclick="event.stopPropagation()">Follow</button>' : '')) +
-      '</div>';
-    }).join('') : '<div class="empty-note">No notifications yet.</div>');
-}
-
-/* ---------------- Profile ---------------- */
-let profileTab = 'posts';
-let returnView = 'feed';
-let lastViewedProfile = null;
-
-function renderProfile(){
-  const mine = posts.filter(p=>p.user===ME.u);
-  const savedPosts = posts.filter(p=>p.saved);
-  const shown = profileTab==='posts'? mine : savedPosts;
-  document.getElementById('main-col').innerHTML = `
-    <div class="profile-header">
-      <img src="${ME.avatar}">
-      <div>
-        <h2>${ME.u} <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button> <button class="toggle-theme" onclick="toggleTheme()">Toggle theme</button></h2>
-        <div class="profile-stats">
-          <span><b>${mine.length}</b> posts</span>
-          <span><b>1,204</b> followers</span>
-          <span><b>318</b> following</span>
-        </div>
-        <div class="profile-bio">
-          <b>${ME.name}</b>
-          Building things, chasing good light.<br>\ud83d\udccd Wherever the wifi is decent
-        </div>
-      </div>
-    </div>
-    <div class="profile-tabs">
-      <button class="${profileTab==='posts'?'active':''}" onclick="setProfileTab('posts')">POSTS</button>
-      <button class="${profileTab==='saved'?'active':''}" onclick="setProfileTab('saved')">SAVED</button>
-    </div>
-    <div class="grid">
-      ${shown.length? shown.map(p=>'<div class="cell" onclick="openPostModal('+p.id+')"><img src="'+p.img+'"></div>').join('') : '<div class="empty-note" style="grid-column:1/-1">Nothing here yet.</div>'}
-    </div>
-  `;
-}
-function setProfileTab(t){ profileTab = t; renderProfile(); }
-
-/* ---------------- Other users' profiles ---------------- */
-function viewProfile(username){
-  closePostModal();
-  if(document.getElementById('story-viewer').classList.contains('open')) closeStoryViewer();
-  if(username === ME.u){ showView('profile'); return; }
-  if(currentView !== 'otherProfile') returnView = currentView;
-  currentView = 'otherProfile';
-  lastViewedProfile = username;
-  document.getElementById('app').classList.remove('full','wide');
-  ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(id=>document.getElementById(id).classList.remove('active'));
-  renderOtherProfile(username);
-  window.scrollTo({top:0,behavior:'smooth'});
-}
-
-function backFromProfile(){
-  showView(returnView);
-}
-
-function renderOtherProfile(username){
-  const theirPosts = posts.filter(p=>p.user===username && !p.contexts.includes('reel'));
-  const seed = theirPosts[0] || null;
-  const storyEntry = storiesContent[username];
-  const avatar = (seed && seed.avatar) || (storyEntry && storyEntry.avatar) || 'https://i.pravatar.cc/112';
-  document.getElementById('main-col').innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;padding:14px 4px;">
-      <button onclick="backFromProfile()" style="background:none;border:none;color:var(--text);">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-      <span style="font-weight:600;font-size:15px;">${username}</span>
-    </div>
-    <div class="profile-header">
-      <img src="${avatar}">
-      <div>
-        <h2>${username} <button class="toggle-theme" style="background:var(--accent-d);color:#fff;border-color:var(--accent-d);">Follow</button> <button class="toggle-theme" onclick="messageUser('${username}')">Message</button></h2>
-        <div class="profile-stats">
-          <span><b>${theirPosts.length}</b> posts</span>
-          <span><b>${(300+username.length*137)%9000}</b> followers</span>
-          <span><b>${(50+username.length*11)%900}</b> following</span>
-        </div>
-        <div class="profile-bio"><b>${username}</b>Sharing moments on Pulse.</div>
-      </div>
-    </div>
-    <div class="grid">
-      ${theirPosts.length? theirPosts.map(p=>'<div class="cell" onclick="openPostModal('+p.id+')"><img src="'+p.img+'"></div>').join('') : '<div class="empty-note" style="grid-column:1/-1">No posts yet.</div>'}
-    </div>
-  `;
-}
-
-/* ---------------- Suggestions (side col) ---------------- */
-function renderSuggestions(){
-  document.getElementById('suggestions').innerHTML = suggestionsData.map(s=>`
-    <div class="suggestion">
-      <div class="l" style="cursor:pointer" onclick="viewProfile('${s.u}')"><img src="${s.img}"><div><div class="u">${s.u}</div><div class="n">${s.n}</div></div></div>
-      <button onclick="event.stopPropagation()">Follow</button>
-    </div>`).join('');
-}
-
-/* ---------------- View switching ---------------- */
-function showView(v){
-  currentView = v;
-  activeChatId = null;
-  const app = document.getElementById('app');
-  app.classList.remove('full','wide');
-  ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(id=>document.getElementById(id).classList.remove('active'));
-  if(v==='feed'){ renderFeed(); document.getElementById('nav-feed').classList.add('active'); }
-  else if(v==='explore'){ renderExplore(); document.getElementById('nav-explore').classList.add('active'); }
-  else if(v==='reels'){ app.classList.add('full'); renderReels(); document.getElementById('nav-reels').classList.add('active'); }
-  else if(v==='messages'){ app.classList.add('wide'); renderMessages(); }
-  else if(v==='notifications'){ renderNotifications(); }
-  else if(v==='profile'){ renderProfile(); document.getElementById('nav-profile').classList.add('active'); }
-  window.scrollTo({top:0,behavior:'smooth'});
-}
-
-function refresh(){
-  if(currentView==='feed') renderFeed();
-  else if(currentView==='explore') renderExploreGrid();
-  else if(currentView==='reels') renderReels();
-  else if(currentView==='profile') renderProfile();
-  else if(currentView==='otherProfile' && lastViewedProfile) renderOtherProfile(lastViewedProfile);
-  if(postModalOpenId!==null) document.getElementById('post-modal-content').innerHTML = renderPost(findPost(postModalOpenId));
-}
-
-/* ---------------- Post interactions ---------------- */
-function likePost(id, fromDblClick){
-  const p = findPost(id);
-  const idx = meData.likedPosts.indexOf(id);
-  if(fromDblClick){
-    if(!p.liked){
-      p.liked=true; p.likes++;
-      meData.likedPosts.push(id);
-      const b = document.getElementById('burst-'+id);
-      if(b){ b.classList.remove('play'); void b.offsetWidth; b.classList.add('play'); }
-    }
-  } else {
-    p.liked = !p.liked;
-    p.likes += p.liked ? 1 : -1;
-    if(p.liked) meData.likedPosts.push(id);
-    else if(idx>-1) meData.likedPosts.splice(idx,1);
-  }
-  refresh();
-  saveSharedPosts();
-  savePersonal();
-}
-function savePost(id){
-  const p = findPost(id);
-  p.saved = !p.saved;
-  const idx = meData.savedPosts.indexOf(id);
-  if(p.saved && idx===-1) meData.savedPosts.push(id);
-  else if(!p.saved && idx>-1) meData.savedPosts.splice(idx,1);
-  refresh();
-  savePersonal();
-}
-function focusComment(id){ const el=document.getElementById('comment-input-'+id); if(el) el.focus(); }
-function toggleCommentBtn(id){
-  const input = document.getElementById('comment-input-'+id);
-  const btn = document.getElementById('comment-btn-'+id);
-  btn.classList.toggle('enabled', input.value.trim().length>0);
-}
-function addComment(id){
-  const input = document.getElementById('comment-input-'+id);
-  const text = input.value.trim();
-  if(!text) return;
-  findPost(id).comments.push({u:ME.u, t:text});
-  refresh();
-  saveSharedPosts();
-}
-
-/* ---------------- Story viewer ---------------- */
-let svUser = null, svIndex = 0, svTimer = null;
-const SV_DURATION = 4500;
-
-function getStoryUser(u){
-  if(u===ME.u){
-    const mine = storiesContent[ME.u] || {avatar:ME.avatar, items:[]};
-    return {u:ME.u, avatar:ME.avatar, items:mine.items, mine:true};
-  }
-  const s = storiesContent[u];
-  return s ? {u, avatar:s.avatar, items:s.items, mine:false} : {items:[]};
-}
-
-function openStoryViewer(u){
-  svUser = getStoryUser(u);
-  if(!svUser.items || svUser.items.length===0) return;
-  svIndex = 0;
-  document.getElementById('story-viewer').classList.add('open');
-  document.getElementById('sv-uname').textContent = svUser.u;
-  document.getElementById('sv-avatar').src = svUser.avatar;
-  document.getElementById('sv-delete').style.display = svUser.mine ? 'flex' : 'none';
-  playStory();
-  document.addEventListener('keydown', svKeyHandler);
-}
-
-function svKeyHandler(e){
-  if(e.key==='ArrowRight') storyNext();
-  else if(e.key==='ArrowLeft') storyPrev();
-  else if(e.key==='Escape') closeStoryViewer();
-}
-
-function renderSvBars(){
-  const bars = document.getElementById('sv-bars');
-  bars.innerHTML = svUser.items.map((_,i)=>
-    '<div class="sv-bar"><div class="sv-bar-fill '+(i<svIndex?'done':'')+'" id="sv-fill-'+i+'"></div></div>'
-  ).join('');
-}
-
-function playStory(){
-  clearTimeout(svTimer);
-  renderSvBars();
-  const item = svUser.items[svIndex];
-  document.getElementById('sv-image').src = item.img;
-  document.getElementById('sv-time').textContent = item.time || '';
-  const fill = document.getElementById('sv-fill-'+svIndex);
-  if(fill){
-    fill.style.animationDuration = SV_DURATION+'ms';
-    fill.classList.add('playing');
-  }
-  svTimer = setTimeout(storyNext, SV_DURATION);
-}
-
-function storyNext(){
-  if(svIndex < svUser.items.length-1){ svIndex++; playStory(); }
-  else { markCurrentSeen(); closeStoryViewer(); }
-}
-function storyPrev(){
-  if(svIndex>0){ svIndex--; playStory(); }
-}
-function markCurrentSeen(){
-  if(!svUser.mine && svUser.u && !meData.seenStories.includes(svUser.u)){
-    meData.seenStories.push(svUser.u);
-    savePersonal();
-    if(currentView==='feed') renderFeed();
-  }
-}
-function closeStoryViewer(){
-  clearTimeout(svTimer);
-  markCurrentSeen();
-  document.getElementById('story-viewer').classList.remove('open');
-  document.removeEventListener('keydown', svKeyHandler);
-}
-
-/* ---------------- Create modal (post or story) ---------------- */
-function openCreateModal(tab){
-  setCreateTab(tab || 'post');
-  document.getElementById('create-modal').classList.add('open');
-}
-function setCreateTab(tab){
-  createTab = tab;
-  document.getElementById('tab-post').classList.toggle('active', tab==='post');
-  document.getElementById('tab-story').classList.toggle('active', tab==='story');
-  document.getElementById('create-title').textContent = tab==='post' ? 'Create new post' : 'Add to your story';
-  document.getElementById('caption-input').style.display = tab==='post' ? 'block' : 'none';
-  document.getElementById('share-btn').textContent = tab==='post' ? 'Share' : 'Add to story';
-}
-function closeCreateModal(){
-  document.getElementById('create-modal').classList.remove('open');
-  document.getElementById('drop-zone').style.display='flex';
-  document.getElementById('preview-img').style.display='none';
-  document.getElementById('caption-input').value='';
-  document.getElementById('file-input').value='';
-  document.getElementById('share-btn').disabled = true;
-  pendingImage = null;
-}
-document.getElementById('file-input').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    pendingImage = ev.target.result;
-    const img = document.getElementById('preview-img');
-    img.src = pendingImage;
-    img.style.display='block';
-    document.getElementById('drop-zone').style.display='none';
-    document.getElementById('share-btn').disabled = false;
-  };
-  reader.readAsDataURL(file);
-});
-
-function publishCreate(){
-  if(!pendingImage) return;
-  if(createTab==='post'){
-    const caption = document.getElementById('caption-input').value.trim();
-    const newId = Date.now();
-    posts.unshift(mkPost(newId, ME.u, ME.avatar, '', pendingImage, caption, false, false, 0, [], 'JUST NOW', ['feed','explore']));
-    closeCreateModal();
-    showView('feed');
-    saveSharedPosts();
-  } else {
-    if(!storiesContent[ME.u]) storiesContent[ME.u] = {avatar: ME.avatar, items:[]};
-    storiesContent[ME.u].avatar = ME.avatar;
-    storiesContent[ME.u].items.push({img: pendingImage, time:'now'});
-    closeCreateModal();
-    renderFeed();
-    saveSharedStories();
-    savePersonal();
-  }
-}
-
-/* ---------------- New-user onboarding ---------------- */
-let pendingObAvatar = null;
-document.getElementById('ob-file-input').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    pendingObAvatar = ev.target.result;
-    document.getElementById('ob-avatar-preview').src = pendingObAvatar;
-  };
-  reader.readAsDataURL(file);
-});
-function finishOnboarding(skip){
-  if(!skip){
-    const n = document.getElementById('ob-name-input').value.trim();
-    const u = document.getElementById('ob-username-input').value.trim();
-    if(n) ME.name = n;
-    if(u) renameMe(u.replace(/\s+/g,'').toLowerCase());
-    if(pendingObAvatar) ME.avatar = pendingObAvatar;
-  }
-  meData.onboarded = true;
-  updateMeUI();
-  refresh();
-  savePersonal();
-  document.getElementById('onboarding-overlay').classList.remove('open');
-}
-
-/* ---------------- Edit profile ---------------- */
-let pendingAvatar = null;
-function openEditProfile(){
-  document.getElementById('ep-avatar-preview').src = ME.avatar;
-  document.getElementById('ep-name-input').value = ME.name;
-  document.getElementById('ep-username-input').value = ME.u;
-  pendingAvatar = null;
-  document.getElementById('edit-profile-modal').classList.add('open');
-}
-function closeEditProfile(){
-  document.getElementById('edit-profile-modal').classList.remove('open');
-}
-document.getElementById('ep-file-input').addEventListener('change', e=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    pendingAvatar = ev.target.result;
-    document.getElementById('ep-avatar-preview').src = pendingAvatar;
-  };
-  reader.readAsDataURL(file);
-});
-// Moves your story-content entry when your username changes, so it isn't orphaned under the old name.
-function renameMe(newUsername){
-  if(newUsername === ME.u) return;
-  const old = ME.u;
-  if(storiesContent[old]){
-    storiesContent[newUsername] = storiesContent[old];
-    delete storiesContent[old];
-    saveSharedStories();
-  }
-  ME.u = newUsername;
-}
-function saveProfile(){
-  const newName = document.getElementById('ep-name-input').value.trim();
-  const newUsername = document.getElementById('ep-username-input').value.trim();
-  if(newName) ME.name = newName;
-  if(newUsername) renameMe(newUsername);
-  if(pendingAvatar){
-    ME.avatar = pendingAvatar;
-    if(storiesContent[ME.u]) storiesContent[ME.u].avatar = ME.avatar;
-  }
-  updateMeUI();
-  closeEditProfile();
-  refresh();
-  savePersonal();
-  saveSharedStories();
-}
-function updateMeUI(){
-  document.getElementById('topbar-avatar').src = ME.avatar;
-  document.getElementById('bottomnav-avatar').src = ME.avatar;
-  document.getElementById('sidecol-avatar').src = ME.avatar;
-  document.getElementById('sidecol-uname').textContent = ME.u;
-  document.getElementById('sidecol-name').textContent = ME.name;
-}
-
-/* ---------------- Delete post ---------------- */
-function postMenu(id){
-  const p = findPost(id);
-  if(!p) return;
-  if(p.user !== ME.u){
-    alert('Reporting and unfollowing aren\'t wired up in this demo — only your own posts can be deleted here.');
-    return;
-  }
-  if(!confirm('Delete this post? This can\'t be undone.')) return;
-  posts = posts.filter(x=>x.id!==id);
-  if(postModalOpenId===id) closePostModal();
-  refresh();
-  if(currentView==='profile') renderProfile();
-  saveSharedPosts();
-}
-
-/* ---------------- Delete story item ---------------- */
-function deleteStoryItem(){
-  if(!svUser || !svUser.mine) return;
-  if(!confirm('Delete this story?')) return;
-  const mine = storiesContent[ME.u];
-  if(!mine) return;
-  mine.items.splice(svIndex,1);
-  if(mine.items.length===0){
-    delete storiesContent[ME.u];
-    closeStoryViewer();
-    renderFeed();
-    saveSharedStories();
-    savePersonal();
-    return;
-  }
-  svUser.items = mine.items;
-  if(svIndex>=mine.items.length) svIndex = mine.items.length-1;
-  playStory();
-  saveSharedStories();
-  savePersonal();
-}
-
-/* ---------------- Theme ---------------- */
-function toggleTheme(){
-  theme = theme==='light' ? 'dark' : 'light';
-  document.documentElement.classList.toggle('dark', theme==='dark');
-}
-
-/* ---------------- Global escape-to-close ---------------- */
-document.addEventListener('keydown', e=>{
-  if(e.key !== 'Escape') return;
-  if(document.getElementById('post-modal').classList.contains('open')) closePostModal();
-  else if(document.getElementById('create-modal').classList.contains('open')) closeCreateModal();
-  else if(document.getElementById('edit-profile-modal').classList.contains('open')) closeEditProfile();
-});
-
-/* ---------------- Init ---------------- */
-async function init(){
-  document.getElementById('main-col').innerHTML = '<div class="empty-note">Loading your feed…</div>';
-  await loadAllData();
-  updateMeUI();
-  renderFeed();
-  renderSuggestions();
-  updateMsgDot();
-  document.getElementById('nav-feed').classList.add('active');
-  if(meData.onboarded){
-    document.getElementById('onboarding-overlay').classList.remove('open');
-  } else {
-    document.getElementById('ob-username-input').value = '';
-    document.getElementById('ob-name-input').value = '';
-  }
-}
-init();
-</script>
-
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
 </body>
 </html>
