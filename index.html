@@ -370,6 +370,12 @@
     color:var(--text);outline:none;font-size:14px;
   }
   .chat-input-row button{background:none;border:none;color:var(--accent-d);font-weight:600;font-size:14px;}
+  .attach-btn{background:none;border:none;color:var(--accent-d);padding:2px 4px;display:flex;flex-shrink:0;}
+  .msg-media{display:block;max-width:230px;max-height:300px;border-radius:12px;cursor:zoom-in;margin:2px 0;}
+  .msg-audio{width:230px;max-width:100%;height:40px;}
+  .msg-file{display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none;max-width:230px;padding:2px 0;}
+  .msg-file svg{flex-shrink:0;}
+  .msg-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
   /* ---------- Notifications ---------- */
   .notif-section-label{font-size:14px;font-weight:600;margin:18px 4px 8px;}
@@ -718,6 +724,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
