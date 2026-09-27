@@ -434,6 +434,20 @@
   .song-use{background:var(--accent-d);color:#fff;border:none;border-radius:16px;padding:6px 14px;font-size:12px;font-weight:600;flex-shrink:0;}
   #music-row .mm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;}
   #music-row .mm b{font-weight:600;}
+  .post-speaker{
+    position:absolute;top:10px;right:10px;width:38px;height:38px;border-radius:50%;
+    background:rgba(0,0,0,.55);border:none;color:#fff;display:flex;align-items:center;justify-content:center;
+    z-index:4;transition:transform .12s ease;
+  }
+  .post-speaker:active{transform:scale(1.12);}
+  .post-speaker svg{width:20px;height:20px;}
+  .post-speaker .eq{display:none;height:12px;}
+  .post-speaker .eq i{background:#fff;}
+  .post-speaker.playing svg{display:none;}
+  .post-speaker.playing .eq{display:inline-flex;}
+  .post-speaker.playing .eq i{animation:eqbar .7s ease-in-out infinite alternate;}
+  .post-speaker.playing .eq i:nth-child(2){animation-delay:.15s;}
+  .post-speaker.playing .eq i:nth-child(3){animation-delay:.3s;}
 
   @media(min-width:700px){ .search{display:flex;} }
   @media(min-width:900px){
