@@ -125,6 +125,7 @@ let svLikeCount = 0;
 let pendingAvatarFile = null;   // edit-profile avatar
 let pendingObAvatarFile = null; // onboarding avatar
 let emailAuthMode = 'signup';  // 'signup' | 'login'
+let myEmail = null;          // email attached to this account (null = quick/anonymous account)
 let refreshing = false;
 let presenceChannel = null;
 
@@ -139,10 +140,12 @@ async function boot(){
     const res = await supa.auth.getSession();
     if(res.data && res.data.session){
       authUid = res.data.session.user.id;
+      myEmail = (res.data.session.user && res.data.session.user.email) || null;
     } else {
       const r = await supa.auth.signInAnonymously();
       if(r.error) throw r.error;
       authUid = r.data.user.id;
+      myEmail = null;
     }
     const q = await supa.from('profiles').select('*').eq('id', authUid).maybeSingle();
     if(q.error) throw q.error;
@@ -269,6 +272,7 @@ async function submitEmailAuth(){
       }
       authUid = r.data.user.id;
       if(r.data.session){
+        myEmail = email;
         closeEmailAuth();
         toast('Account created! Now pick your username');
         // the onboarding screen stays open — username step happens there
@@ -280,6 +284,7 @@ async function submitEmailAuth(){
       var r2 = await supa.auth.signInWithPassword({ email: email, password: password });
       if(r2.error){ toast('Wrong email or password'); return; }
       authUid = r2.data.user.id;
+      myEmail = email;
       var q = await supa.from('profiles').select('*').eq('id', authUid).maybeSingle();
       if(q.error) throw q.error;
       if(q.data){
@@ -293,6 +298,50 @@ async function submitEmailAuth(){
         toast('Almost done — pick your username');
         // onboarding screen is open — username step happens there
       }
+    }
+  } catch(e){
+    console.error(e);
+    toast('Something went wrong — please try again');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------------- Add email to a quick account ---------------- */
+function openAddEmail(){
+  document.getElementById('ae-email').value = '';
+  document.getElementById('ae-password').value = '';
+  document.getElementById('add-email-modal').classList.add('open');
+}
+function closeAddEmail(){
+  document.getElementById('add-email-modal').classList.remove('open');
+}
+async function submitAddEmail(){
+  var email = (document.getElementById('ae-email').value || '').trim();
+  var password = document.getElementById('ae-password').value || '';
+  if(!email || email.indexOf('@') < 1){ toast('Please enter a valid email address'); return; }
+  if(password.length < 6){ toast('Password must be at least 6 characters'); return; }
+  var btn = document.getElementById('ae-submit');
+  btn.disabled = true;
+  try {
+    var r = await supa.auth.updateUser({ email: email, password: password });
+    if(r.error){
+      var msg = String(r.error.message || '');
+      if(msg.indexOf('already') !== -1) toast('That email is already used by another account');
+      else if(msg.indexOf('same') !== -1) toast('That email is already on this account');
+      else if(msg.indexOf('different') !== -1) toast('Wait a bit before trying another email change');
+      else toast(msg || 'Could not add the email');
+      return;
+    }
+    var u = r.data && r.data.user ? r.data.user : null;
+    if(u && u.new_email && (!u.email || u.email !== email)){
+      closeAddEmail();
+      toast('Almost done — open your email inbox and click the confirmation link');
+    } else {
+      myEmail = email;
+      closeAddEmail();
+      renderProfile();
+      toast('Email added! You can now log back in with it anytime');
     }
   } catch(e){
     console.error(e);
@@ -1058,6 +1107,7 @@ async function renderProfile(){
           + ' <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button>'
           + ' <button class="toggle-theme" onclick="toggleTheme()">Toggle theme</button>'
           + ' <button class="logout-btn" onclick="logout()">Log out</button>'
+          + (!myEmail ? ' <button class="toggle-theme" style="color:var(--accent-d);font-weight:600;" onclick="openAddEmail()">✉ Add email</button>' : '')
         + '</h2>'
         + '<div class="profile-stats">'
           + '<span><b>' + postCount + '</b> posts</span>'
@@ -2205,6 +2255,7 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('music-modal').classList.contains('open')) closeMusicPicker();
   else if(document.getElementById('edit-profile-modal').classList.contains('open')) closeEditProfile();
   else if(document.getElementById('email-auth-modal').classList.contains('open')) closeEmailAuth();
+  else if(document.getElementById('add-email-modal').classList.contains('open')) closeAddEmail();
 });
 
 /* ---------------- Realtime ---------------- */
