@@ -228,7 +228,20 @@
   }
   .drop-zone svg{width:44px;height:44px;opacity:.5;}
   .drop-zone input{display:none;}
-  .preview-img{display:block;margin:0 auto 12px;max-width:100%;max-height:300px;width:auto;height:auto;object-fit:contain;border-radius:10px;touch-action:none;cursor:default;}
+  .preview-img{display:block;margin:0 auto;max-width:100%;max-height:300px;width:auto;height:auto;object-fit:contain;border-radius:10px;touch-action:none;cursor:default;}
+  #preview-wrap{position:relative;width:100%;margin:0 auto 12px;overflow:hidden;touch-action:none;display:none;}
+  #crop-box{position:absolute;display:none;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.45);pointer-events:none;z-index:5;}
+  #crop-box .h{position:absolute;width:12px;height:12px;background:#fff;border:1px solid rgba(0,0,0,.3);border-radius:2px;}
+  #crop-box .h.nw{top:-7px;left:-7px;}
+  #crop-box .h.n{top:-7px;left:calc(50% - 7px);}
+  #crop-box .h.ne{top:-7px;right:-7px;}
+  #crop-box .h.w{top:calc(50% - 7px);left:-7px;}
+  #crop-box .h.e{top:calc(50% - 7px);right:-7px;}
+  #crop-box .h.sw{bottom:-7px;left:-7px;}
+  #crop-box .h.s{bottom:-7px;left:calc(50% - 7px);}
+  #crop-box .h.se{bottom:-7px;right:-7px;}
+  .crop-chip{padding:6px 12px;border-radius:16px;border:1px solid var(--border);background:none;color:var(--text-soft);font-size:12px;font-weight:600;}
+  .crop-chip.active{background:var(--accent-d);color:#fff;border-color:var(--accent-d);}
   .ed-row{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--text-soft);}
   .ed-row span{width:62px;flex-shrink:0;}
   .ed-row input[type="range"]{flex:1;accent-color:var(--accent-d);min-width:0;}
@@ -539,7 +552,14 @@
         <div>Click to select a photo</div>
         <input type="file" id="file-input" accept="image/*">
       </div>
-      <img id="preview-img" class="preview-img" style="display:none" alt="Preview">
+      <div id="preview-wrap">
+        <img id="preview-img" class="preview-img" style="display:none" alt="Preview">
+        <div id="crop-box">
+          <div class="h nw"></div><div class="h n"></div><div class="h ne"></div>
+          <div class="h w"></div><div class="h e"></div>
+          <div class="h sw"></div><div class="h s"></div><div class="h se"></div>
+        </div>
+      </div>
       <div id="editor-tools" style="display:none;">
         <div class="field-label" style="margin-top:2px;">Edit photo</div>
         <div class="ed-row"><span>Brightness</span><input type="range" id="ed-bright" min="50" max="150" value="100" oninput="onEdSlider('bright',this.value)"><b id="ed-bright-v">100</b></div>
@@ -549,7 +569,23 @@
         <div class="ed-hint">Zoom in and drag the photo to reposition it.</div>
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button type="button" class="tab-btn" style="flex:1;" onclick="edEnhance()">✨ Enhance</button>
+          <button type="button" class="tab-btn" style="flex:1;" onclick="edCropStart()">✂ Crop</button>
           <button type="button" class="tab-btn" style="flex:1;" onclick="edReset()">Reset</button>
+        </div>
+      </div>
+      <div id="crop-tools" style="display:none;">
+        <div class="field-label" style="margin-top:2px;">Crop photo</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="crop-chip" data-r="0" onclick="cropSetRatio(0)">Free</button>
+          <button type="button" class="crop-chip" data-r="1" onclick="cropSetRatio(1)">1:1 Square</button>
+          <button type="button" class="crop-chip" data-r="0.8" onclick="cropSetRatio(0.8)">4:5 Portrait</button>
+          <button type="button" class="crop-chip" data-r="1.7778" onclick="cropSetRatio(1.7778)">16:9 Wide</button>
+          <button type="button" class="crop-chip" data-r="0.5625" onclick="cropSetRatio(0.5625)">9:16 Tall</button>
+        </div>
+        <div class="ed-hint">Drag inside the box to move it · drag edges/corners to resize · drag on an empty part to select a new area.</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button type="button" class="tab-btn" style="flex:1;" onclick="cropApply()">✔ Apply crop</button>
+          <button type="button" class="tab-btn" style="flex:1;" onclick="cropCancel()">Cancel</button>
         </div>
       </div>
       <textarea id="caption-input" placeholder="Write a caption..."></textarea>
