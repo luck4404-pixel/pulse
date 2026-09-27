@@ -115,6 +115,7 @@ let previewAudio = null;
 let previewingKey = null;
 let musicStartReady = null;  // audio_start column exists
 let storyLikesReady = null;  // story_likes table exists
+let mediaMsgReady = null;    // media columns on messages exist
 let svILiked = false;       // do I like the current story item
 let svLikeCount = 0;
 let pendingAvatarFile = null;   // edit-profile avatar
@@ -161,6 +162,7 @@ async function afterLogin(){
   await checkSongTable();
   await checkMusicStart();
   await checkStoryLikes();
+  await checkMediaMsg();
   await refreshData();
   setupRealtime();
   setupPresence();
@@ -277,6 +279,12 @@ async function checkStoryLikes(){
     storyLikesReady = !q.error;
   } catch(e){ storyLikesReady = false; }
 }
+async function checkMediaMsg(){
+  try {
+    const q = await supa.from('messages').select('media_url').limit(1);
+    mediaMsgReady = !q.error;
+  } catch(e){ mediaMsgReady = false; }
+}
 
 /* ---------------- Data fetchers ---------------- */
 function mapPost(p){
@@ -348,7 +356,7 @@ async function fetchStories(){
 
 async function fetchConversations(){
   const q = await supa.from('messages')
-    .select('id,sender_id,recipient_id,text,read_at,created_at,sender:profiles!messages_sender_id_fkey(id,username,avatar_url),recipient:profiles!messages_recipient_id_fkey(id,username,avatar_url)')
+    .select('id,sender_id,recipient_id,text,read_at,created_at' + (mediaMsgReady ? ',media_url,media_type,media_name' : '') + ',sender:profiles!messages_sender_id_fkey(id,username,avatar_url),recipient:profiles!messages_recipient_id_fkey(id,username,avatar_url)')
     .or('sender_id.eq.' + me.id + ',recipient_id.eq.' + me.id)
     .order('created_at', { ascending: false })
     .limit(300);
@@ -362,7 +370,7 @@ async function fetchConversations(){
         uid: partner,
         user: (partnerProfile && partnerProfile.username) || 'user',
         avatar: partnerProfile ? partnerProfile.avatar_url : null,
-        last: m.text,
+        last: convLastText(m),
         lastTime: m.created_at,
         lastFromMe: m.sender_id === me.id,
         unread: m.recipient_id === me.id && !m.read_at
@@ -729,13 +737,17 @@ function renderChat(){
     + '</div>'
     + '<div class="chat-thread" id="chat-thread">'
     + (chatThread.length ? chatThread.map(function(m){
-        return '<div class="bubble ' + (m.sender_id === me.id ? 'me' : 'them') + '">' + esc(m.text) + '</div>';
+        return '<div class="bubble ' + (m.sender_id === me.id ? 'me' : 'them') + '">' + renderMsgBody(m) + '</div>';
       }).join('') : '<div class="empty-note">Say hi!</div>')
     + '</div>'
     + '<div class="chat-input-row">'
+      + '<button class="attach-btn" title="Send a photo, video, audio or file" onclick="document.getElementById(\'chat-file-input\').click()">'
+        + '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>'
+      + '</button>'
       + '<input id="chat-input" placeholder="Message..." onkeydown="if(event.key===\'Enter\')sendChat()">'
       + '<button onclick="sendChat()">Send</button>'
-    + '</div>';
+    + '</div>'
+    + '<input type="file" id="chat-file-input" style="display:none" onchange="onChatFile()">';
   updatePresenceDots();
   const thread = document.getElementById('chat-thread');
   if(thread) thread.scrollTop = thread.scrollHeight;
@@ -759,6 +771,80 @@ async function sendMessage(partnerId, text){
   const r = await supa.from('messages').insert({ sender_id: me.id, recipient_id: partnerId, text: text });
   if(r.error){ toast('Could not send the message'); }
   scheduleConvRefresh();
+}
+
+/* ---------------- File / media messages ---------------- */
+function convLastText(m){
+  if(m && m.media_url){
+    if(m.media_type === 'image') return '\ud83d\udcf7 Photo';
+    if(m.media_type === 'video') return '\ud83c\udfac Video';
+    if(m.media_type === 'audio') return '\ud83c\udfb5 Audio';
+    if(m.text) return m.text;
+    return '\ud83d\udcce ' + (m.media_name || 'File');
+  }
+  return m ? m.text : '';
+}
+function renderMsgBody(m){
+  if(m.media_url){
+    var inner = '';
+    if(m.media_type === 'image'){
+      inner = '<img class="msg-media" src="' + esc(m.media_url) + '" loading="lazy" onclick="openUrlViewer(\'' + m.media_url + '\')">';
+    } else if(m.media_type === 'video'){
+      inner = '<video class="msg-media" src="' + esc(m.media_url) + '" controls preload="metadata"></video>';
+    } else if(m.media_type === 'audio'){
+      inner = '<audio class="msg-audio" src="' + esc(m.media_url) + '" controls preload="metadata"></audio>';
+    } else {
+      inner = '<a class="msg-file" href="' + esc(m.media_url) + '" target="_blank" download><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>' + esc(m.media_name || 'Download file') + '</span></a>';
+    }
+    return inner + (m.text ? '<div>' + esc(m.text) + '</div>' : '');
+  }
+  return esc(m.text);
+}
+function openUrlViewer(url){
+  var img = document.getElementById('img-viewer-img');
+  if(!img) return;
+  img.src = url;
+  document.getElementById('img-viewer').classList.add('open');
+}
+async function uploadMsgFile(file){
+  var safeName = (file && file.name ? file.name : 'file').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'file';
+  var path = me.id + '/msg_' + Date.now() + '_' + safeName;
+  var up = await supa.storage.from('media').upload(path, file, { contentType: (file && file.type) || 'application/octet-stream' });
+  if(up.error) throw up.error;
+  var pub = supa.storage.from('media').getPublicUrl(path);
+  return pub.data.publicUrl;
+}
+function onChatFile(){
+  var f = document.getElementById('chat-file-input');
+  var file = f && f.files ? f.files[0] : null;
+  if(f) f.value = '';
+  if(!file || !activeChat) return;
+  if(!mediaMsgReady){ toast('File messages need a one-time SQL update — see media-messages.sql'); return; }
+  if(file.size > 50 * 1024 * 1024){ toast('File is too big (max 50 MB)'); return; }
+  sendChatFile(file);
+}
+async function sendChatFile(file){
+  var t = (file.type || '').split('/')[0];
+  var mediaType = 'file';
+  if(t === 'image') mediaType = 'image';
+  else if(t === 'video') mediaType = 'video';
+  else if(t === 'audio') mediaType = 'audio';
+  toast('Uploading ' + (file.name || 'file') + '\u2026');
+  try {
+    var url = await uploadMsgFile(file);
+    var r = await supa.from('messages').insert({
+      sender_id: me.id, recipient_id: activeChat, text: '',
+      media_url: url, media_type: mediaType,
+      media_name: (file.name || '').slice(0, 120) || null
+    });
+    if(r.error) throw r.error;
+    await fetchThread();
+    renderChat();
+    scheduleConvRefresh();
+  } catch(err){
+    console.error(err);
+    toast('Could not send the file');
+  }
 }
 
 /* ---------------- Notifications ---------------- */
