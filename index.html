@@ -379,6 +379,47 @@
 
   .empty-note{text-align:center;padding:60px 20px;color:var(--text-soft);font-size:14px;}
 
+  /* ---------- Music on posts / stories ---------- */
+  .music-chip{
+    display:inline-flex;align-items:center;gap:8px;margin:8px 14px 0;padding:6px 12px;
+    background:var(--bg);border:1px solid var(--border);border-radius:18px;font-size:12.5px;
+    max-width:calc(100% - 28px);cursor:pointer;color:var(--text);
+  }
+  .music-chip .mtitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px;flex-shrink:0;}
+  .eq i{width:2.5px;height:4px;background:var(--text-soft);border-radius:1px;}
+  .music-chip.playing .eq i, #sv-music-sticker.playing .eq i, .reel-music-chip.playing .eq i{
+    background:var(--accent-d);animation:eqbar .7s ease-in-out infinite alternate;
+  }
+  .eq.playing i:nth-child(2){animation-delay:.15s;}
+  .eq.playing i:nth-child(3){animation-delay:.3s;}
+  @keyframes eqbar{from{height:3px;}to{height:12px;}}
+  .cell-music-badge{
+    position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;
+    font-size:12px;padding:2px 8px;border-radius:10px;
+  }
+  #music-section{margin-top:10px;}
+  .add-music-btn{
+    width:100%;padding:9px;border:1px dashed var(--border);border-radius:8px;background:none;
+    color:var(--text-soft);font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  #music-row{display:none;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:8px;}
+  #music-row .note{font-size:15px;flex-shrink:0;}
+  #music-row input{flex:1;min-width:0;border:none;background:none;outline:none;color:var(--text);font-size:13px;padding:4px 2px;}
+  #music-row input.music-artist{border-left:1px solid var(--border);padding-left:8px;color:var(--text-soft);}
+  #music-row .rm{background:none;border:none;color:var(--text-soft);font-size:15px;padding:2px 4px;}
+  #sv-music-sticker{
+    position:absolute;top:14px;left:14px;display:none;align-items:center;gap:8px;
+    background:rgba(0,0,0,.55);color:#fff;font-size:12.5px;padding:7px 12px;border-radius:18px;
+    max-width:70%;z-index:5;
+  }
+  #sv-music-sticker .mtitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .reel-music-chip{
+    display:inline-flex;align-items:center;gap:7px;margin-top:8px;background:rgba(0,0,0,.45);
+    padding:5px 11px;border-radius:16px;font-size:12px;color:#fff;max-width:100%;cursor:pointer;
+  }
+  .reel-music-chip .mtitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
   @media(min-width:700px){ .search{display:flex;} }
   @media(min-width:900px){
     .side-col{display:block;}
@@ -466,6 +507,16 @@
       </div>
       <img id="preview-img" class="preview-img" style="display:none">
       <textarea id="caption-input" placeholder="Write a caption..."></textarea>
+      <div id="music-section">
+        <button type="button" class="add-music-btn" id="add-music-btn" onclick="pickMusic()">♪ Add music</button>
+        <input type="file" id="music-file-input" accept="audio/*" style="display:none">
+        <div id="music-row">
+          <span class="note">♪</span>
+          <input id="music-title-input" type="text" placeholder="Song title" oninput="if(pendingAudio)pendingAudio.title=this.value">
+          <input id="music-artist-input" class="music-artist" type="text" placeholder="Artist" oninput="if(pendingAudio)pendingAudio.artist=this.value">
+          <button type="button" class="rm" onclick="clearMusic()" title="Remove music">&times;</button>
+        </div>
+      </div>
       <button class="share-btn" id="share-btn" disabled onclick="publishCreate()">Share</button>
     </div>
   </div>
@@ -516,6 +567,7 @@
     <img id="sv-image" src="">
     <button class="sv-tap left" onclick="storyPrev()"></button>
     <button class="sv-tap right" onclick="storyNext()"></button>
+    <div id="sv-music-sticker"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle"></span></div>
   </div>
   <div class="sv-foot">
     <input id="sv-reply" placeholder="Reply to story..." onkeydown="if(event.key==='Enter')sendStoryReply()">
