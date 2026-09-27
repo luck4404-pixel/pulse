@@ -104,8 +104,13 @@ let returnView = 'feed';
 let theme = 'light';
 let pendingImage = null;   // {file, dataUrl}
 let createTab = 'post';
-let pendingAudio = null;   // {file, title, artist} — chosen song for the create modal
+let pendingSong = null;    // {url, title, artist} — song selected from the library
 let musicReady = null;     // whether the audio columns exist in the DB
+let songsCache = [];       // shared song library
+let songsReady = null;     // whether the songs table exists
+let songListShown = [];    // filtered list currently rendered in the picker
+let previewAudio = null;
+let previewingKey = null;
 let pendingAvatarFile = null;   // edit-profile avatar
 let pendingObAvatarFile = null; // onboarding avatar
 let refreshing = false;
@@ -147,6 +152,7 @@ async function afterLogin(){
   updateMeUI();
   await Promise.all([loadFollows(), loadSavedIds(), loadSuggestions()]);
   await checkMusicColumns();
+  await checkSongTable();
   await refreshData();
   setupRealtime();
   setupPresence();
@@ -241,6 +247,13 @@ async function checkMusicColumns(){
 }
 function audioFields(){
   return musicReady ? ',audio_url,audio_title,audio_artist' : '';
+}
+
+async function checkSongTable(){
+  try {
+    const q = await supa.from('songs').select('id').limit(1);
+    songsReady = !q.error;
+  } catch(e){ songsReady = false; }
 }
 
 /* ---------------- Data fetchers ---------------- */
@@ -1038,6 +1051,7 @@ function renderSvBars(){
 
 function playStory(){
   clearTimeout(svTimer);
+  stopAudio();
   stopStoryAudio();
   renderSvBars();
   const item = svUser.items[svIndex];
@@ -1148,7 +1162,7 @@ function closeCreateModal(){
   document.getElementById('file-input').value = '';
   document.getElementById('share-btn').disabled = true;
   pendingImage = null;
-  pendingAudio = null;
+  pendingSong = null;
   renderMusicRow();
 }
 document.getElementById('file-input').addEventListener('change', function(e){
@@ -1167,56 +1181,143 @@ document.getElementById('file-input').addEventListener('change', function(e){
   reader.readAsDataURL(file);
 });
 
-function pickMusic(){
-  if(musicReady === false){ toast('Music needs a one-time SQL update in Supabase — see music-setup.sql'); return; }
-  document.getElementById('music-file-input').click();
+function openMusicPicker(){
+  if(musicReady === false || songsReady === false){
+    toast('Music needs a one-time SQL update in Supabase — see music-library-setup.sql');
+    return;
+  }
+  document.getElementById('music-modal').classList.add('open');
+  document.getElementById('music-search').value = '';
+  renderSongList();
+  loadSongs();
 }
-document.getElementById('music-file-input').addEventListener('change', function(e){
-  var file = e.target.files[0];
-  e.target.value = '';
-  if(!file) return;
-  var guess = (file.name || 'audio').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim() || 'audio';
-  pendingAudio = { file: file, title: guess, artist: '' };
+function closeMusicPicker(){
+  document.getElementById('music-modal').classList.remove('open');
+  stopPreview();
+}
+async function loadSongs(){
+  const q = await supa.from('songs').select('id,title,artist,audio_url,created_at').order('created_at', { ascending: false }).limit(500);
+  if(!q.error) songsCache = q.data || [];
+  renderSongList();
+}
+function renderSongList(){
+  var el = document.getElementById('song-list');
+  if(!el) return;
+  var term = (document.getElementById('music-search').value || '').trim().toLowerCase();
+  var list = songsCache;
+  if(term){
+    list = list.filter(function(s){
+      return String(s.title || '').toLowerCase().indexOf(term) !== -1 || String(s.artist || '').toLowerCase().indexOf(term) !== -1;
+    });
+  }
+  songListShown = list;
+  if(!list.length){
+    el.innerHTML = '<div class="empty-note" style="padding:26px 8px;">' + (songsCache.length ? 'No songs match that search.' : 'The library is empty.<br>Tap + Add a song to upload the first one!') + '</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(s, i){
+    var key = s.id || ('idx' + i);
+    return '<div class="song-row">'
+      + '<button class="song-play" id="sp-' + key + '" onclick="toggleSongPreview(\'' + key + '\')"><span class="eq"><i></i><i></i><i></i></span></button>'
+      + '<div class="song-meta" onclick="chooseSong(' + i + ')"><div class="t">' + esc(s.title || 'Untitled') + '</div><div class="a">' + esc(s.artist || 'Unknown artist') + '</div></div>'
+      + '<button class="song-use" onclick="chooseSong(' + i + ')">Use</button>'
+    + '</div>';
+  }).join('');
+}
+function stopPreview(){
+  if(previewAudio){ try{ previewAudio.pause(); }catch(e){} previewAudio = null; }
+  previewingKey = null;
+  var btns = document.querySelectorAll('.song-play');
+  for(var i=0;i<btns.length;i++) btns[i].classList.remove('playing');
+}
+function toggleSongPreview(key){
+  var song = null;
+  for(var i=0;i<songListShown.length;i++){
+    var k = songListShown[i].id || ('idx' + i);
+    if(String(k) === String(key)){ song = songListShown[i]; break; }
+  }
+  if(!song) return;
+  if(previewingKey === String(key)){ stopPreview(); return; }
+  stopPreview();
+  previewingKey = String(key);
+  try {
+    previewAudio = new Audio(song.audio_url);
+    previewAudio.onended = stopPreview;
+    previewAudio.onerror = stopPreview;
+    previewAudio.play().catch(stopPreview);
+  } catch(e){ stopPreview(); return; }
+  var btn = document.getElementById('sp-' + key);
+  if(btn) btn.classList.add('playing');
+}
+function chooseSong(i){
+  var s = songListShown[i];
+  if(!s) return;
+  pendingSong = { url: s.audio_url, title: s.title || '', artist: s.artist || '' };
+  stopPreview();
+  closeMusicPicker();
   renderMusicRow();
-});
+  toast('Song added — ' + (pendingSong.title || 'Untitled'));
+}
 function renderMusicRow(){
   var row = document.getElementById('music-row');
   var btn = document.getElementById('add-music-btn');
   if(!row || !btn) return;
-  if(pendingAudio){
+  if(pendingSong){
     row.style.display = 'flex';
     btn.style.display = 'none';
-    document.getElementById('music-title-input').value = pendingAudio.title || '';
-    document.getElementById('music-artist-input').value = pendingAudio.artist || '';
+    document.getElementById('music-row-title').textContent = pendingSong.title || 'Untitled';
+    document.getElementById('music-row-artist').textContent = pendingSong.artist ? ' · ' + pendingSong.artist : '';
   } else {
     row.style.display = 'none';
     btn.style.display = 'flex';
   }
 }
-function clearMusic(){ pendingAudio = null; renderMusicRow(); }
+function clearMusic(){ pendingSong = null; renderMusicRow(); }
+
+document.getElementById('song-file-input').addEventListener('change', async function(e){
+  var file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  var guess = (file.name || 'audio').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim() || 'audio';
+  var title = prompt('Song title:', guess);
+  if(title === null) return;
+  var artist = prompt('Artist (optional):', '') || '';
+  try {
+    var url = await uploadAudioFile(file);
+    var r = await supa.from('songs').insert({ title: (title || guess), artist: artist || null, audio_url: url, added_by: me.id });
+    if(r.error) throw r.error;
+    toast('Song added to the library');
+    await loadSongs();
+    for(var i=0;i<songsCache.length;i++){
+      if(songsCache[i].audio_url === url){
+        pendingSong = { url: url, title: songsCache[i].title, artist: songsCache[i].artist || '' };
+        break;
+      }
+    }
+    renderMusicRow();
+  } catch(err){
+    console.error(err);
+    toast('Could not add the song');
+  }
+});
 
 async function publishCreate(){
   if(!pendingImage || !pendingImage.file) return;
   const btn = document.getElementById('share-btn');
   btn.disabled = true; btn.textContent = 'Uploading...';
   try {
-    if(pendingAudio && musicReady === false){
-      toast('Music not enabled yet — run music-setup.sql in Supabase. Posting without music.');
-      pendingAudio = null;
-    }
     var audioUrl = null;
-    if(pendingAudio){
-      try { audioUrl = await uploadAudioFile(pendingAudio.file); }
-      catch(err){ console.error(err); toast('Music upload failed — posting without it'); }
+    if(pendingSong && musicReady){
+      audioUrl = pendingSong.url;
     }
     const url = await uploadImage(pendingImage.file);
     if(createTab === 'post'){
       const caption = document.getElementById('caption-input').value.trim();
       var payload = { user_id: me.id, image_url: url, caption: caption || null };
-      if(audioUrl && musicReady){
+      if(audioUrl){
         payload.audio_url = audioUrl;
-        payload.audio_title = pendingAudio.title || null;
-        payload.audio_artist = pendingAudio.artist || null;
+        payload.audio_title = pendingSong.title || null;
+        payload.audio_artist = pendingSong.artist || null;
       }
       const r = await supa.from('posts').insert(payload);
       if(r.error) throw r.error;
@@ -1226,10 +1327,10 @@ async function publishCreate(){
       toast('Posted!');
     } else {
       var payload2 = { user_id: me.id, image_url: url };
-      if(audioUrl && musicReady){
+      if(audioUrl){
         payload2.audio_url = audioUrl;
-        payload2.audio_title = pendingAudio.title || null;
-        payload2.audio_artist = pendingAudio.artist || null;
+        payload2.audio_title = pendingSong.title || null;
+        payload2.audio_artist = pendingSong.artist || null;
       }
       const r = await supa.from('stories').insert(payload2);
       if(r.error) throw r.error;
@@ -1334,6 +1435,7 @@ document.addEventListener('keydown', function(e){
   if(e.key !== 'Escape') return;
   if(document.getElementById('post-modal').classList.contains('open')) closePostModal();
   else if(document.getElementById('create-modal').classList.contains('open')) closeCreateModal();
+  else if(document.getElementById('music-modal').classList.contains('open')) closeMusicPicker();
   else if(document.getElementById('edit-profile-modal').classList.contains('open')) closeEditProfile();
 });
 
