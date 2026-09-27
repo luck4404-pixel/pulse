@@ -243,7 +243,7 @@ function mapPost(p){
 
 async function fetchFeed(limit){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at,profiles(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles(id,username,avatar_url))')
+    .select('id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
     .order('created_at', { ascending: false })
     .limit(limit || 40);
   if(q.error){ console.error(q.error); return []; }
@@ -252,7 +252,7 @@ async function fetchFeed(limit){
 
 async function fetchExplorePool(){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at,profiles(id,username,avatar_url),likes(user_id)')
+    .select('id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(200);
   if(q.error){ console.error(q.error); return []; }
@@ -261,7 +261,7 @@ async function fetchExplorePool(){
 
 async function fetchSavedPosts(){
   const q = await supa.from('saved')
-    .select('posts(id,user_id,image_url,caption,created_at,profiles(id,username,avatar_url),likes(user_id))')
+    .select('posts(id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id))')
     .eq('user_id', me.id);
   if(q.error){ console.error(q.error); return []; }
   return (q.data || []).map(function(r){ return r.posts ? mapPost(r.posts) : null; }).filter(Boolean);
@@ -270,7 +270,7 @@ async function fetchSavedPosts(){
 async function fetchStories(){
   const since = new Date(Date.now() - 24*3600*1000).toISOString();
   const q = await supa.from('stories')
-    .select('id,user_id,image_url,created_at,profiles(id,username,avatar_url)')
+    .select('id,user_id,image_url,created_at,profiles!stories_user_id_fkey(id,username,avatar_url)')
     .gt('created_at', since)
     .order('created_at', { ascending: true })
     .limit(300);
@@ -746,7 +746,7 @@ async function renderOtherProfile(username){
   }
   const prof = q.data;
   const results = await Promise.all([
-    supa.from('posts').select('id,user_id,image_url,caption,created_at,profiles(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
+    supa.from('posts').select('id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
     countRows('posts', 'user_id', prof.id),
     countRows('follows', 'following_id', prof.id),
     countRows('follows', 'follower_id', prof.id)
