@@ -104,6 +104,8 @@ let returnView = 'feed';
 let theme = 'light';
 let pendingImage = null;   // {file, dataUrl}
 let createTab = 'post';
+let pendingAudio = null;   // {file, title, artist} — chosen song for the create modal
+let musicReady = null;     // whether the audio columns exist in the DB
 let pendingAvatarFile = null;   // edit-profile avatar
 let pendingObAvatarFile = null; // onboarding avatar
 let refreshing = false;
@@ -144,6 +146,7 @@ async function boot(){
 async function afterLogin(){
   updateMeUI();
   await Promise.all([loadFollows(), loadSavedIds(), loadSuggestions()]);
+  await checkMusicColumns();
   await refreshData();
   setupRealtime();
   setupPresence();
@@ -220,6 +223,26 @@ async function uploadImage(file){
   return pub.data.publicUrl;
 }
 
+async function uploadAudioFile(file){
+  const safeName = (file && file.name ? file.name : 'audio').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'audio';
+  const path = me.id + '/' + Date.now() + '_' + safeName;
+  const up = await supa.storage.from('media').upload(path, file, { contentType: (file && file.type) || 'audio/mpeg' });
+  if(up.error) throw up.error;
+  const pub = supa.storage.from('media').getPublicUrl(path);
+  return pub.data.publicUrl;
+}
+
+/* music columns appear only after the owner runs music-setup.sql — probe once */
+async function checkMusicColumns(){
+  try {
+    const q = await supa.from('posts').select('audio_url').limit(1);
+    musicReady = !(q.error && (q.error.code === 'PGRST204' || String(q.error.message || '').indexOf('column') !== -1));
+  } catch(e){ musicReady = false; }
+}
+function audioFields(){
+  return musicReady ? ',audio_url,audio_title,audio_artist' : '';
+}
+
 /* ---------------- Data fetchers ---------------- */
 function mapPost(p){
   return {
@@ -229,6 +252,9 @@ function mapPost(p){
     avatar: p.profiles ? p.profiles.avatar_url : null,
     img: p.image_url,
     caption: p.caption || '',
+    audio: p.audio_url || null,
+    audioTitle: p.audio_title || '',
+    audioArtist: p.audio_artist || '',
     time: p.created_at,
     likes: (p.likes || []).map(function(l){ return l.user_id; }),
     comments: (p.comments || []).map(function(c){
@@ -243,7 +269,7 @@ function mapPost(p){
 
 async function fetchFeed(limit){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+    .select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
     .order('created_at', { ascending: false })
     .limit(limit || 40);
   if(q.error){ console.error(q.error); return []; }
@@ -252,7 +278,7 @@ async function fetchFeed(limit){
 
 async function fetchExplorePool(){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
+    .select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(200);
   if(q.error){ console.error(q.error); return []; }
@@ -261,7 +287,7 @@ async function fetchExplorePool(){
 
 async function fetchSavedPosts(){
   const q = await supa.from('saved')
-    .select('posts(id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id))')
+    .select('posts(id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id))')
     .eq('user_id', me.id);
   if(q.error){ console.error(q.error); return []; }
   return (q.data || []).map(function(r){ return r.posts ? mapPost(r.posts) : null; }).filter(Boolean);
@@ -270,7 +296,7 @@ async function fetchSavedPosts(){
 async function fetchStories(){
   const since = new Date(Date.now() - 24*3600*1000).toISOString();
   const q = await supa.from('stories')
-    .select('id,user_id,image_url,created_at,profiles!stories_user_id_fkey(id,username,avatar_url)')
+    .select('id,user_id,image_url,created_at' + audioFields() + ',profiles!stories_user_id_fkey(id,username,avatar_url)')
     .gt('created_at', since)
     .order('created_at', { ascending: true })
     .limit(300);
@@ -279,7 +305,7 @@ async function fetchStories(){
   (q.data || []).forEach(function(s){
     const uname = (s.profiles && s.profiles.username) || 'user';
     if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [] };
-    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at });
+    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '' });
   });
   return map;
 }
@@ -449,6 +475,7 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-likes">' + p.likes.length.toLocaleString() + ' like' + (p.likes.length === 1 ? '' : 's') + '</div>'
     + '<div class="post-caption"><span class="cap-uname" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">' + esc(p.user) + '</span>' + esc(p.caption) + '</div>'
+    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '" onclick="togglePostAudio(\'' + p.id + '\')"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
     + (p.comments.length ? (
         (!showAll && p.comments.length > 2 ? '<button class="post-comments-link" onclick="expandComments(\'' + p.id + '\')">View all ' + p.comments.length + ' comments</button>' : '')
         + '<div class="post-comment-list">'
@@ -470,6 +497,31 @@ function expandComments(id){
   if(!p) return;
   p.commentsExpanded = true;
   refresh();
+}
+
+/* ---------------- Audio playback (one song at a time) ---------------- */
+let currentAudio = null;
+let playingAudioPostId = null;
+function stopAudio(){
+  if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
+  playingAudioPostId = null;
+  var chips = document.querySelectorAll('.music-chip');
+  for(var i=0;i<chips.length;i++) chips[i].classList.remove('playing');
+}
+function togglePostAudio(id){
+  var p = postIndex[id];
+  if(!p || !p.audio) return;
+  if(playingAudioPostId === id){ stopAudio(); return; }
+  stopAudio();
+  try { currentAudio = new Audio(p.audio); }
+  catch(e){ toast('Could not play this audio'); return; }
+  currentAudio.onended = stopAudio;
+  currentAudio.onerror = function(){ toast('Could not play this audio'); stopAudio(); };
+  currentAudio.play().then(function(){
+    playingAudioPostId = id;
+    var chip = document.getElementById('mc-' + id);
+    if(chip) chip.classList.add('playing');
+  }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
 }
 
 function renderFeed(){
@@ -509,7 +561,7 @@ function renderExploreGrid(){
   }
   document.getElementById('explore-grid').innerHTML =
     (pool.length ? pool.map(function(p){
-      return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy"></div>';
+      return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + '</div>';
     }).join('') : '<div class="empty-note" style="grid-column:1/-1;">No results' + (term ? ' for that search' : '') + '.</div>');
 }
 
@@ -538,6 +590,7 @@ function renderReels(){
           + '<div class="reel-overlay-bottom">'
             + '<div class="u" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
             + '<div class="cap">' + esc(p.caption) + '</div>'
+            + (p.audio ? '<div class="reel-music-chip" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
           + '</div>'
           + '<div class="reel-rail">'
             + '<button class="' + (liked ? 'liked' : '') + '" onclick="likePost(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '<span>' + p.likes.length + '</span></button>'
@@ -707,7 +760,7 @@ async function renderProfile(){
     + '</div>'
     + '<div class="grid">'
     + (shown.length ? shown.map(function(p){
-        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy"></div>';
+        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + '</div>';
       }).join('') : '<div class="empty-note" style="grid-column:1/-1;">' + (profileTab === 'posts' ? 'No posts yet.' : 'Nothing saved yet.') + '</div>')
     + '</div>';
 }
@@ -746,7 +799,7 @@ async function renderOtherProfile(username){
   }
   const prof = q.data;
   const results = await Promise.all([
-    supa.from('posts').select('id,user_id,image_url,caption,created_at,profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
+    supa.from('posts').select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
     countRows('posts', 'user_id', prof.id),
     countRows('follows', 'following_id', prof.id),
     countRows('follows', 'follower_id', prof.id)
@@ -776,7 +829,7 @@ async function renderOtherProfile(username){
     + '</div>'
     + '<div class="grid">'
     + (theirPosts.length ? theirPosts.map(function(p){
-        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy"></div>';
+        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + '</div>';
       }).join('') : '<div class="empty-note" style="grid-column:1/-1;">No posts yet.</div>')
     + '</div>';
   theirPosts.forEach(function(p){ postIndex[p.id] = p; });
@@ -939,7 +992,15 @@ async function toggleFollow(uid){
 
 /* ---------------- Story viewer ---------------- */
 let svUser = null, svIndex = 0, svTimer = null;
+let svAudio = null;
 const SV_DURATION = 4500;
+const SV_MUSIC_DURATION = 8000;
+
+function stopStoryAudio(){
+  if(svAudio){ try{ svAudio.pause(); }catch(e){} svAudio = null; }
+  var st = document.getElementById('sv-music-sticker');
+  if(st) st.style.display = 'none';
+}
 
 function getStoryUser(u){
   if(me && u === me.username){
@@ -977,16 +1038,31 @@ function renderSvBars(){
 
 function playStory(){
   clearTimeout(svTimer);
+  stopStoryAudio();
   renderSvBars();
   const item = svUser.items[svIndex];
   document.getElementById('sv-image').src = item.img;
   document.getElementById('sv-time').textContent = timeAgo(item.time);
+  const sticker = document.getElementById('sv-music-sticker');
+  if(item.audio){
+    if(sticker){
+      sticker.style.display = 'flex';
+      sticker.querySelector('.mtitle').textContent = (item.audioTitle || 'audio') + (item.audioArtist ? ' · ' + item.audioArtist : '');
+    }
+    try {
+      svAudio = new Audio(item.audio);
+      svAudio.play().catch(function(){});
+    } catch(e){ svAudio = null; }
+  } else if(sticker){
+    sticker.style.display = 'none';
+  }
+  const dur = item.audio ? SV_MUSIC_DURATION : SV_DURATION;
   const fill = document.getElementById('sv-fill-' + svIndex);
   if(fill){
-    fill.style.animationDuration = SV_DURATION + 'ms';
+    fill.style.animationDuration = dur + 'ms';
     fill.classList.add('playing');
   }
-  svTimer = setTimeout(storyNext, SV_DURATION);
+  svTimer = setTimeout(storyNext, dur);
 }
 
 function storyNext(){
@@ -1007,6 +1083,7 @@ function markCurrentStorySeen(){
 }
 function closeStoryViewer(){
   clearTimeout(svTimer);
+  stopStoryAudio();
   markCurrentStorySeen();
   document.getElementById('story-viewer').classList.remove('open');
   document.removeEventListener('keydown', svKeyHandler);
@@ -1052,6 +1129,7 @@ async function deleteStoryItem(){
 function openCreateModal(tab){
   if(!me){ toast('Finish signing up first'); return; }
   setCreateTab(tab || 'post');
+  renderMusicRow();
   document.getElementById('create-modal').classList.add('open');
 }
 function setCreateTab(tab){
@@ -1070,6 +1148,8 @@ function closeCreateModal(){
   document.getElementById('file-input').value = '';
   document.getElementById('share-btn').disabled = true;
   pendingImage = null;
+  pendingAudio = null;
+  renderMusicRow();
 }
 document.getElementById('file-input').addEventListener('change', function(e){
   const file = e.target.files[0];
@@ -1087,22 +1167,71 @@ document.getElementById('file-input').addEventListener('change', function(e){
   reader.readAsDataURL(file);
 });
 
+function pickMusic(){
+  if(musicReady === false){ toast('Music needs a one-time SQL update in Supabase — see music-setup.sql'); return; }
+  document.getElementById('music-file-input').click();
+}
+document.getElementById('music-file-input').addEventListener('change', function(e){
+  var file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  var guess = (file.name || 'audio').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim() || 'audio';
+  pendingAudio = { file: file, title: guess, artist: '' };
+  renderMusicRow();
+});
+function renderMusicRow(){
+  var row = document.getElementById('music-row');
+  var btn = document.getElementById('add-music-btn');
+  if(!row || !btn) return;
+  if(pendingAudio){
+    row.style.display = 'flex';
+    btn.style.display = 'none';
+    document.getElementById('music-title-input').value = pendingAudio.title || '';
+    document.getElementById('music-artist-input').value = pendingAudio.artist || '';
+  } else {
+    row.style.display = 'none';
+    btn.style.display = 'flex';
+  }
+}
+function clearMusic(){ pendingAudio = null; renderMusicRow(); }
+
 async function publishCreate(){
   if(!pendingImage || !pendingImage.file) return;
   const btn = document.getElementById('share-btn');
   btn.disabled = true; btn.textContent = 'Uploading...';
   try {
+    if(pendingAudio && musicReady === false){
+      toast('Music not enabled yet — run music-setup.sql in Supabase. Posting without music.');
+      pendingAudio = null;
+    }
+    var audioUrl = null;
+    if(pendingAudio){
+      try { audioUrl = await uploadAudioFile(pendingAudio.file); }
+      catch(err){ console.error(err); toast('Music upload failed — posting without it'); }
+    }
     const url = await uploadImage(pendingImage.file);
     if(createTab === 'post'){
       const caption = document.getElementById('caption-input').value.trim();
-      const r = await supa.from('posts').insert({ user_id: me.id, image_url: url, caption: caption || null });
+      var payload = { user_id: me.id, image_url: url, caption: caption || null };
+      if(audioUrl && musicReady){
+        payload.audio_url = audioUrl;
+        payload.audio_title = pendingAudio.title || null;
+        payload.audio_artist = pendingAudio.artist || null;
+      }
+      const r = await supa.from('posts').insert(payload);
       if(r.error) throw r.error;
       closeCreateModal();
       await refreshData();
       showView('feed');
       toast('Posted!');
     } else {
-      const r = await supa.from('stories').insert({ user_id: me.id, image_url: url });
+      var payload2 = { user_id: me.id, image_url: url };
+      if(audioUrl && musicReady){
+        payload2.audio_url = audioUrl;
+        payload2.audio_title = pendingAudio.title || null;
+        payload2.audio_artist = pendingAudio.artist || null;
+      }
+      const r = await supa.from('stories').insert(payload2);
       if(r.error) throw r.error;
       closeCreateModal();
       await refreshData();
