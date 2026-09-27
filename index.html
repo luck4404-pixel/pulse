@@ -281,6 +281,7 @@
   }
   .sv-foot input::placeholder{color:rgba(255,255,255,.6);}
   .sv-foot button{background:none;border:none;color:#fff;}
+  .sv-foot button.liked svg{fill:var(--like);stroke:var(--like);}
   .sv-foot svg{width:26px;height:26px;}
 
   /* ---------- Explore ---------- */
@@ -529,6 +530,14 @@
           <button type="button" class="rm" onclick="clearMusic()" title="Remove music">&times;</button>
         </div>
       </div>
+      <div id="music-timeline" style="display:none;">
+        <label class="field-label" style="margin-top:10px;">Where should the song start?</label>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="range" id="music-start-range" min="0" max="30" step="0.5" value="0" style="flex:1;accent-color:var(--accent-d);" oninput="onStartRange()">
+          <span id="music-start-time" style="font-size:12px;color:var(--text-soft);min-width:38px;text-align:right;">0:00</span>
+          <button type="button" class="song-use" style="padding:5px 10px;" onclick="previewFromStart()" title="Preview from here">▶</button>
+        </div>
+      </div>
       <button class="share-btn" id="share-btn" disabled onclick="publishCreate()">Share</button>
     </div>
   </div>
@@ -599,7 +608,8 @@
   </div>
   <div class="sv-foot">
     <input id="sv-reply" placeholder="Reply to story..." onkeydown="if(event.key==='Enter')sendStoryReply()">
-    <button title="Like" onclick="storyLikeTap()">
+    <span id="sv-like-count" style="display:none;color:#fff;font-size:12.5px;align-self:center;font-weight:600;"></span>
+    <button title="Like" id="sv-like-btn" onclick="storyLikeTap()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6a5.5 5.5 0 0 0-9.3-4A5.5 5.5 0 0 0 2.7 11c1.6 4 8.8 9 9.3 9.3.5-.3 7.7-5.3 9.3-9.3.5-1 .5-1.7.5-2.4Z"/></svg>
     </button>
   </div>
