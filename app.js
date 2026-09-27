@@ -111,6 +111,10 @@ let songsReady = null;     // whether the songs table exists
 let songListShown = [];    // filtered list currently rendered in the picker
 let previewAudio = null;
 let previewingKey = null;
+let musicStartReady = null;  // audio_start column exists
+let storyLikesReady = null;  // story_likes table exists
+let svILiked = false;       // do I like the current story item
+let svLikeCount = 0;
 let pendingAvatarFile = null;   // edit-profile avatar
 let pendingObAvatarFile = null; // onboarding avatar
 let refreshing = false;
@@ -153,6 +157,8 @@ async function afterLogin(){
   await Promise.all([loadFollows(), loadSavedIds(), loadSuggestions()]);
   await checkMusicColumns();
   await checkSongTable();
+  await checkMusicStart();
+  await checkStoryLikes();
   await refreshData();
   setupRealtime();
   setupPresence();
@@ -246,7 +252,8 @@ async function checkMusicColumns(){
   } catch(e){ musicReady = false; }
 }
 function audioFields(){
-  return musicReady ? ',audio_url,audio_title,audio_artist' : '';
+  if(!musicReady) return '';
+  return ',audio_url,audio_title,audio_artist' + (musicStartReady ? ',audio_start' : '');
 }
 
 async function checkSongTable(){
@@ -254,6 +261,19 @@ async function checkSongTable(){
     const q = await supa.from('songs').select('id').limit(1);
     songsReady = !q.error;
   } catch(e){ songsReady = false; }
+}
+
+async function checkMusicStart(){
+  try {
+    const q = await supa.from('posts').select('audio_start').limit(1);
+    musicStartReady = !q.error;
+  } catch(e){ musicStartReady = false; }
+}
+async function checkStoryLikes(){
+  try {
+    const q = await supa.from('story_likes').select('story_id').limit(1);
+    storyLikesReady = !q.error;
+  } catch(e){ storyLikesReady = false; }
 }
 
 /* ---------------- Data fetchers ---------------- */
@@ -268,6 +288,7 @@ function mapPost(p){
     audio: p.audio_url || null,
     audioTitle: p.audio_title || '',
     audioArtist: p.audio_artist || '',
+    audioStart: Number(p.audio_start) || 0,
     time: p.created_at,
     likes: (p.likes || []).map(function(l){ return l.user_id; }),
     comments: (p.comments || []).map(function(c){
@@ -318,7 +339,7 @@ async function fetchStories(){
   (q.data || []).forEach(function(s){
     const uname = (s.profiles && s.profiles.username) || 'user';
     if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [] };
-    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '' });
+    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0 });
   });
   return map;
 }
@@ -532,6 +553,7 @@ function togglePostAudio(id){
   currentAudio.onerror = function(){ toast('Could not play this audio'); stopAudio(); };
   currentAudio.play().then(function(){
     playingAudioPostId = id;
+    if(p.audioStart > 0){ try{ currentAudio.currentTime = p.audioStart; }catch(e){} }
     var chip = document.getElementById('mc-' + id);
     if(chip) chip.classList.add('playing');
   }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
@@ -715,6 +737,7 @@ function renderNotifications(){
     if(n.type === 'like') text = 'liked your post.';
     else if(n.type === 'comment') text = 'commented on your post.';
     else if(n.type === 'follow') text = 'started following you.';
+    else if(n.type === 'story_like') text = 'liked your story.';
     else text = 'interacted with you.';
     const icon = n.type === 'like' ? heartFilled : commentIcon;
     return '<div class="notif-row">'
@@ -1054,6 +1077,7 @@ function playStory(){
   stopAudio();
   stopStoryAudio();
   renderSvBars();
+  loadStoryLikeState();
   const item = svUser.items[svIndex];
   document.getElementById('sv-image').src = item.img;
   document.getElementById('sv-time').textContent = timeAgo(item.time);
@@ -1065,7 +1089,9 @@ function playStory(){
     }
     try {
       svAudio = new Audio(item.audio);
-      svAudio.play().catch(function(){});
+      svAudio.play().then(function(){
+        if(item.audioStart > 0){ try{ svAudio.currentTime = item.audioStart; }catch(e){} }
+      }).catch(function(){});
     } catch(e){ svAudio = null; }
   } else if(sticker){
     sticker.style.display = 'none';
@@ -1114,12 +1140,59 @@ function sendStoryReply(){
   }
   storyNext();
 }
-function storyLikeTap(){
-  if(svUser && svUser.uid && svUser.uid !== me.id){
-    sendMessage(svUser.uid, '(liked your story)');
-    toast('Sent');
+
+async function loadStoryLikeState(){
+  svILiked = false;
+  svLikeCount = 0;
+  var item = svUser && svUser.items && svUser.items[svIndex] ? svUser.items[svIndex] : null;
+  updateStoryLikeUI();
+  if(!item || !storyLikesReady) return;
+  try {
+    var q = await supa.from('story_likes').select('user_id').eq('story_id', item.id);
+    if(q.error) return;
+    var rows = q.data || [];
+    svLikeCount = rows.length;
+    svILiked = rows.some(function(r){ return r.user_id === me.id; });
+    updateStoryLikeUI();
+  } catch(e){}
+}
+function updateStoryLikeUI(){
+  var btn = document.getElementById('sv-like-btn');
+  var cnt = document.getElementById('sv-like-count');
+  if(!btn || !cnt) return;
+  if(svUser && svUser.mine){
+    btn.style.display = 'none';
+    cnt.style.display = svLikeCount > 0 ? 'inline' : 'none';
+    cnt.textContent = '\u2665 ' + svLikeCount;
+  } else {
+    cnt.style.display = 'none';
+    btn.style.display = 'flex';
+    btn.classList.toggle('liked', svILiked);
   }
-  storyNext();
+}
+async function storyLikeTap(){
+  var item = svUser && svUser.items && svUser.items[svIndex] ? svUser.items[svIndex] : null;
+  if(!item || !svUser || svUser.mine) return;
+  if(!storyLikesReady){ toast('Story likes need a one-time SQL update in Supabase — see story-likes-timeline.sql'); return; }
+  if(svILiked){
+    var d = await supa.from('story_likes').delete().match({ story_id: item.id, user_id: me.id });
+    if(d.error){ toast('Could not remove the like'); return; }
+    svILiked = false;
+    svLikeCount = Math.max(0, svLikeCount - 1);
+    updateStoryLikeUI();
+    toast('Like removed');
+  } else {
+    var r = await supa.from('story_likes').insert({ story_id: item.id, user_id: me.id });
+    if(r.error){ toast('Could not like the story'); return; }
+    svILiked = true;
+    svLikeCount += 1;
+    updateStoryLikeUI();
+    toast('Liked!');
+    if(svUser.uid && svUser.uid !== me.id){
+      supa.from('notifications').insert({ user_id: svUser.uid, actor_id: me.id, type: 'story_like' })
+        .then(function(){}, function(err){ console.error(err); });
+    }
+  }
 }
 
 async function deleteStoryItem(){
@@ -1252,24 +1325,81 @@ function toggleSongPreview(key){
 function chooseSong(i){
   var s = songListShown[i];
   if(!s) return;
-  pendingSong = { url: s.audio_url, title: s.title || '', artist: s.artist || '' };
+  pendingSong = { url: s.audio_url, title: s.title || '', artist: s.artist || '', start: 0, duration: 0 };
   stopPreview();
   closeMusicPicker();
   renderMusicRow();
+  probeSongDuration();
   toast('Song added — ' + (pendingSong.title || 'Untitled'));
+}
+
+/* ---- song start-time picker (timeline) ---- */
+function probeSongDuration(){
+  if(!pendingSong || !pendingSong.url) return;
+  try {
+    var probe = new Audio();
+    probe.preload = 'metadata';
+    probe.onloadedmetadata = function(){
+      if(!pendingSong) return;
+      pendingSong.duration = isFinite(probe.duration) ? probe.duration : 0;
+      var r = document.getElementById('music-start-range');
+      if(r && pendingSong.duration > 5) r.max = Math.floor(pendingSong.duration - 5);
+      updateTimeLabel();
+    };
+    probe.src = pendingSong.url;
+  } catch(e){}
+}
+function onStartRange(){
+  if(!pendingSong) return;
+  pendingSong.start = parseFloat(document.getElementById('music-start-range').value) || 0;
+  updateTimeLabel();
+}
+function updateTimeLabel(){
+  var el = document.getElementById('music-start-time');
+  if(!el || !pendingSong) return;
+  var t = pendingSong.start || 0;
+  var m = Math.floor(t / 60), s = Math.floor(t % 60);
+  el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+}
+function previewFromStart(){
+  if(!pendingSong || !pendingSong.url) return;
+  stopPreview();
+  try {
+    previewAudio = new Audio(pendingSong.url);
+    previewAudio.onended = stopPreview;
+    previewAudio.onerror = stopPreview;
+    previewAudio.play().then(function(){
+      if(pendingSong && pendingSong.start > 0){ try{ previewAudio.currentTime = pendingSong.start; }catch(e){} }
+    }).catch(function(){ stopPreview(); });
+  } catch(e){ stopPreview(); }
 }
 function renderMusicRow(){
   var row = document.getElementById('music-row');
   var btn = document.getElementById('add-music-btn');
   if(!row || !btn) return;
+  var tl = document.getElementById('music-timeline');
   if(pendingSong){
     row.style.display = 'flex';
     btn.style.display = 'none';
     document.getElementById('music-row-title').textContent = pendingSong.title || 'Untitled';
     document.getElementById('music-row-artist').textContent = pendingSong.artist ? ' · ' + pendingSong.artist : '';
+    if(tl){
+      if(musicStartReady){
+        tl.style.display = 'block';
+        var r = document.getElementById('music-start-range');
+        if(r){
+          if(pendingSong.duration > 5) r.max = Math.floor(pendingSong.duration - 5);
+          r.value = pendingSong.start || 0;
+        }
+        updateTimeLabel();
+      } else {
+        tl.style.display = 'none';
+      }
+    }
   } else {
     row.style.display = 'none';
     btn.style.display = 'flex';
+    if(tl) tl.style.display = 'none';
   }
 }
 function clearMusic(){ pendingSong = null; renderMusicRow(); }
@@ -1290,7 +1420,8 @@ document.getElementById('song-file-input').addEventListener('change', async func
     await loadSongs();
     for(var i=0;i<songsCache.length;i++){
       if(songsCache[i].audio_url === url){
-        pendingSong = { url: url, title: songsCache[i].title, artist: songsCache[i].artist || '' };
+        pendingSong = { url: url, title: songsCache[i].title, artist: songsCache[i].artist || '', start: 0, duration: 0 };
+        probeSongDuration();
         break;
       }
     }
@@ -1318,6 +1449,7 @@ async function publishCreate(){
         payload.audio_url = audioUrl;
         payload.audio_title = pendingSong.title || null;
         payload.audio_artist = pendingSong.artist || null;
+        if(musicStartReady) payload.audio_start = pendingSong.start || 0;
       }
       const r = await supa.from('posts').insert(payload);
       if(r.error) throw r.error;
@@ -1331,6 +1463,7 @@ async function publishCreate(){
         payload2.audio_url = audioUrl;
         payload2.audio_title = pendingSong.title || null;
         payload2.audio_artist = pendingSong.artist || null;
+        if(musicStartReady) payload2.audio_start = pendingSong.start || 0;
       }
       const r = await supa.from('stories').insert(payload2);
       if(r.error) throw r.error;
