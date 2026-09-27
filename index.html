@@ -256,6 +256,10 @@
     width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);
     color:var(--text);padding:10px;font-size:14px;outline:none;
   }
+  .modal input[type="email"],.modal input[type="password"]{
+    width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);
+    color:var(--text);padding:10px;font-size:14px;outline:none;
+  }
   .share-btn{
     width:100%;margin-top:14px;padding:10px;border:none;border-radius:8px;
     background:var(--accent-d);color:#fff;font-weight:600;font-size:14px;
@@ -704,6 +708,25 @@
   </div>
 </div>
 
+<!-- Email sign up / log in -->
+<div class="modal-overlay" id="email-auth-modal" onclick="if(event.target===this)closeEmailAuth()">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-head"><h3 id="email-auth-title">Sign up with email</h3><button onclick="closeEmailAuth()">&times;</button></div>
+    <div class="modal-body">
+      <div class="tabs">
+        <button class="tab-btn active" id="ea-tab-signup" onclick="setEmailAuthTab('signup')">Sign up</button>
+        <button class="tab-btn" id="ea-tab-login" onclick="setEmailAuthTab('login')">Log in</button>
+      </div>
+      <label class="field-label" style="margin-top:2px;">Email</label>
+      <input id="ea-email" type="email" placeholder="you@example.com">
+      <label class="field-label">Password</label>
+      <input id="ea-password" type="password" placeholder="at least 6 characters">
+      <button class="share-btn" id="ea-submit" onclick="submitEmailAuth()">Sign up</button>
+      <button class="ghost-btn" onclick="closeEmailAuth()">Back</button>
+    </div>
+  </div>
+</div>
+
 <!-- New user onboarding -->
 <div class="modal-overlay open" id="onboarding-overlay" style="z-index:400;">
   <div class="modal" style="max-width:380px;">
@@ -725,6 +748,10 @@
       <input id="ob-bio-input" type="text" placeholder="Say something about you">
       <button class="share-btn" id="ob-continue-btn" onclick="finishOnboarding(false)">Continue</button>
       <button class="ghost-btn" onclick="finishOnboarding(true)">Skip for now</button>
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
+        <button class="toggle-theme" style="font-size:12px;padding:7px 12px;" onclick="showEmailAuth('signup')">✉ Sign up with email</button>
+        <button class="toggle-theme" style="font-size:12px;padding:7px 12px;" onclick="showEmailAuth('login')">🔒 Log in with email</button>
+      </div>
     </div>
   </div>
 </div>
@@ -736,6 +763,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
