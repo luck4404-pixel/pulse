@@ -419,6 +419,20 @@
     padding:5px 11px;border-radius:16px;font-size:12px;color:#fff;max-width:100%;cursor:pointer;
   }
   .reel-music-chip .mtitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .song-row{display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid var(--border);}
+  .song-row:last-child{border-bottom:none;}
+  .song-play{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .song-play .eq{height:11px;}
+  .song-play .eq i{background:var(--text-soft);}
+  .song-play.playing .eq i{background:var(--accent-d);animation:eqbar .7s ease-in-out infinite alternate;}
+  .song-play.playing .eq i:nth-child(2){animation-delay:.15s;}
+  .song-play.playing .eq i:nth-child(3){animation-delay:.3s;}
+  .song-meta{flex:1;min-width:0;cursor:pointer;}
+  .song-meta .t{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .song-meta .a{font-size:12px;color:var(--text-soft);}
+  .song-use{background:var(--accent-d);color:#fff;border:none;border-radius:16px;padding:6px 14px;font-size:12px;font-weight:600;flex-shrink:0;}
+  #music-row .mm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;}
+  #music-row .mm b{font-weight:600;}
 
   @media(min-width:700px){ .search{display:flex;} }
   @media(min-width:900px){
@@ -508,12 +522,10 @@
       <img id="preview-img" class="preview-img" style="display:none">
       <textarea id="caption-input" placeholder="Write a caption..."></textarea>
       <div id="music-section">
-        <button type="button" class="add-music-btn" id="add-music-btn" onclick="pickMusic()">♪ Add music</button>
-        <input type="file" id="music-file-input" accept="audio/*" style="display:none">
+        <button type="button" class="add-music-btn" id="add-music-btn" onclick="openMusicPicker()">♪ Add music</button>
         <div id="music-row">
           <span class="note">♪</span>
-          <input id="music-title-input" type="text" placeholder="Song title" oninput="if(pendingAudio)pendingAudio.title=this.value">
-          <input id="music-artist-input" class="music-artist" type="text" placeholder="Artist" oninput="if(pendingAudio)pendingAudio.artist=this.value">
+          <div class="mm"><b id="music-row-title"></b><span id="music-row-artist"></span></div>
           <button type="button" class="rm" onclick="clearMusic()" title="Remove music">&times;</button>
         </div>
       </div>
@@ -548,6 +560,22 @@
   <div class="modal">
     <button id="post-modal-close" onclick="closePostModal()">&times;</button>
     <div id="post-modal-content"></div>
+  </div>
+</div>
+
+<!-- Music picker -->
+<div class="modal-overlay" id="music-modal" onclick="if(event.target===this)closeMusicPicker()">
+  <div class="modal">
+    <div class="modal-head"><h3>Music</h3><button onclick="closeMusicPicker()">&times;</button></div>
+    <div class="modal-body" style="padding:12px 14px 16px;">
+      <div class="explore-search" style="margin:2px 0 10px;">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="music-search" placeholder="Search songs" oninput="renderSongList()">
+      </div>
+      <button type="button" class="add-music-btn" style="margin-bottom:10px;" onclick="document.getElementById('song-file-input').click()">+ Add a song to the library</button>
+      <input type="file" id="song-file-input" accept="audio/*" style="display:none">
+      <div id="song-list" style="max-height:46vh;overflow-y:auto;"></div>
+    </div>
   </div>
 </div>
 
