@@ -21,6 +21,7 @@ const shareIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const bookmarkOutline = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
 const bookmarkFilled = '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
 const moreIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>';
+const speakerIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 
 /* ---------------- Helpers ---------------- */
 function esc(s){
@@ -497,6 +498,7 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-media" ondblclick="likePost(\'' + p.id + '\', true)">'
       + '<img src="' + p.img + '" loading="lazy">'
+      + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
     + '<div class="post-actions">'
@@ -509,7 +511,7 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-likes">' + p.likes.length.toLocaleString() + ' like' + (p.likes.length === 1 ? '' : 's') + '</div>'
     + '<div class="post-caption"><span class="cap-uname" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">' + esc(p.user) + '</span>' + esc(p.caption) + '</div>'
-    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '" onclick="togglePostAudio(\'' + p.id + '\')"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
+    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
     + (p.comments.length ? (
         (!showAll && p.comments.length > 2 ? '<button class="post-comments-link" onclick="expandComments(\'' + p.id + '\')">View all ' + p.comments.length + ' comments</button>' : '')
         + '<div class="post-comment-list">'
@@ -539,7 +541,7 @@ let playingAudioPostId = null;
 function stopAudio(){
   if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
   playingAudioPostId = null;
-  var chips = document.querySelectorAll('.music-chip');
+  var chips = document.querySelectorAll('.music-chip, .post-speaker');
   for(var i=0;i<chips.length;i++) chips[i].classList.remove('playing');
 }
 function togglePostAudio(id){
@@ -556,6 +558,8 @@ function togglePostAudio(id){
     if(p.audioStart > 0){ try{ currentAudio.currentTime = p.audioStart; }catch(e){} }
     var chip = document.getElementById('mc-' + id);
     if(chip) chip.classList.add('playing');
+    var spk = document.getElementById('spk-' + id);
+    if(spk) spk.classList.add('playing');
   }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
 }
 
@@ -622,10 +626,11 @@ function renderReels(){
         const liked = p.likes.indexOf(me.id) !== -1;
         return '<div class="reel">'
           + '<img src="' + p.img + '" loading="lazy">'
+          + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
           + '<div class="reel-overlay-bottom">'
             + '<div class="u" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
             + '<div class="cap">' + esc(p.caption) + '</div>'
-            + (p.audio ? '<div class="reel-music-chip" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
+            + (p.audio ? '<div class="reel-music-chip"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
           + '</div>'
           + '<div class="reel-rail">'
             + '<button class="' + (liked ? 'liked' : '') + '" onclick="likePost(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '<span>' + p.likes.length + '</span></button>'
