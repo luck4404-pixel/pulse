@@ -124,6 +124,7 @@ let svILiked = false;       // do I like the current story item
 let svLikeCount = 0;
 let pendingAvatarFile = null;   // edit-profile avatar
 let pendingObAvatarFile = null; // onboarding avatar
+let emailAuthMode = 'signup';  // 'signup' | 'login'
 let refreshing = false;
 let presenceChannel = null;
 
@@ -231,6 +232,73 @@ async function finishOnboarding(skip){
     toast('Welcome to Pulse, ' + esc(me.username) + '!');
   } finally {
     btn.disabled = false; btn.textContent = 'Continue';
+  }
+}
+
+/* ---------------- Email sign-up / log-in ---------------- */
+function showEmailAuth(mode){
+  setEmailAuthTab(mode || 'signup');
+  document.getElementById('email-auth-modal').classList.add('open');
+}
+function closeEmailAuth(){
+  document.getElementById('email-auth-modal').classList.remove('open');
+}
+function setEmailAuthTab(mode){
+  emailAuthMode = mode;
+  document.getElementById('ea-tab-signup').classList.toggle('active', mode === 'signup');
+  document.getElementById('ea-tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('email-auth-title').textContent = mode === 'signup' ? 'Sign up with email' : 'Log in with email';
+  document.getElementById('ea-submit').textContent = mode === 'signup' ? 'Sign up' : 'Log in';
+}
+async function submitEmailAuth(){
+  var email = (document.getElementById('ea-email').value || '').trim();
+  var password = document.getElementById('ea-password').value || '';
+  if(!email || email.indexOf('@') < 1){ toast('Please enter a valid email address'); return; }
+  if(password.length < 6){ toast('Password must be at least 6 characters'); return; }
+  var btn = document.getElementById('ea-submit');
+  btn.disabled = true;
+  try {
+    if(emailAuthMode === 'signup'){
+      var r = await supa.auth.signUp({ email: email, password: password });
+      if(r.error){
+        var msg = String(r.error.message || '');
+        if(msg.indexOf('already') !== -1) toast('That email is already registered — try Log in');
+        else if(msg.indexOf('rate') !== -1) toast('Too many tries — wait a minute and try again');
+        else toast(msg || 'Could not sign up');
+        return;
+      }
+      authUid = r.data.user.id;
+      if(r.data.session){
+        closeEmailAuth();
+        toast('Account created! Now pick your username');
+        // the onboarding screen stays open — username step happens there
+      } else {
+        toast('Check your email inbox, click the confirmation link, then come back and Log in');
+        setEmailAuthTab('login');
+      }
+    } else {
+      var r2 = await supa.auth.signInWithPassword({ email: email, password: password });
+      if(r2.error){ toast('Wrong email or password'); return; }
+      authUid = r2.data.user.id;
+      var q = await supa.from('profiles').select('*').eq('id', authUid).maybeSingle();
+      if(q.error) throw q.error;
+      if(q.data){
+        me = q.data;
+        closeEmailAuth();
+        document.getElementById('onboarding-overlay').classList.remove('open');
+        await afterLogin();
+        toast('Welcome back, ' + esc(me.username) + '!');
+      } else {
+        closeEmailAuth();
+        toast('Almost done — pick your username');
+        // onboarding screen is open — username step happens there
+      }
+    }
+  } catch(e){
+    console.error(e);
+    toast('Something went wrong — please try again');
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -2116,7 +2184,7 @@ async function postMenu(id){
 
 /* ---------------- Log out ---------------- */
 async function logout(){
-  if(!confirm('Log out? Heads-up: without a password, this account cannot be signed back into later.')) return;
+  if(!confirm('Log out? Email accounts can log back in anytime; quick (no-email) accounts cannot be signed back into.')) return;
   try { await supa.removeAllChannels(); } catch(e){}
   try { await supa.auth.signOut(); } catch(e){}
   location.reload();
@@ -2136,6 +2204,7 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('create-modal').classList.contains('open')) closeCreateModal();
   else if(document.getElementById('music-modal').classList.contains('open')) closeMusicPicker();
   else if(document.getElementById('edit-profile-modal').classList.contains('open')) closeEditProfile();
+  else if(document.getElementById('email-auth-modal').classList.contains('open')) closeEmailAuth();
 });
 
 /* ---------------- Realtime ---------------- */
