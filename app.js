@@ -15,7 +15,7 @@ if (CONFIGURED && window.supabase) {
 
 /* ---------------- Icons ---------------- */
 const heartOutline = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6a5.5 5.5 0 0 0-9.3-4A5.5 5.5 0 0 0 2.7 11c1.6 4 8.8 9 9.3 9.3.5-.3 7.7-5.3 9.3-9.3.5-1 .5-1.7.5-2.4Z"/></svg>';
-const heartFilled = '<svg viewBox="0 0 24 24"><path d="M12.1 21.3S3 15.5 3 9.9C3 6.6 5.5 4 8.6 4c1.9 0 3.2 1 3.5 1.4C12.4 5 13.7 4 15.6 4 18.7 4 21 6.6 21 9.9c0 5.6-8.9 11.4-8.9 11.4Z"/></svg>';
+const heartFilled = '<svg viewBox="0 0 24 24"><path d="M12.1 21.3S3 15.5 3 9.9C3 6.6 5.5 4 8.6 4c1.9 0 3.2 1 3.5 1.4C12.4 5 13.7 4 15.6 4C18.7 4 21 6.6 21 9.9c0 5.6-8.9 11.4-8.9 11.4Z"/></svg>';
 const commentIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4A8.9 8.9 0 0 1 8 19L3 20l1.1-4.5A8.4 8.4 0 1 1 21 11.5Z"/></svg>';
 const shareIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
 const bookmarkOutline = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
@@ -116,6 +116,10 @@ let previewingKey = null;
 let musicStartReady = null;  // audio_start column exists
 let storyLikesReady = null;  // story_likes table exists
 let mediaMsgReady = null;    // media columns on messages exist
+let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
+let pendingChatFile = null;  // file staged via the paperclip — sent only when Send is tapped
+let msgMenuId = null;        // delete-menu open for this message id
+let msgMenuMine = false;
 let svILiked = false;       // do I like the current story item
 let svLikeCount = 0;
 let pendingAvatarFile = null;   // edit-profile avatar
@@ -163,6 +167,7 @@ async function afterLogin(){
   await checkMusicStart();
   await checkStoryLikes();
   await checkMediaMsg();
+  await checkMediaMsgV2();
   await refreshData();
   setupRealtime();
   setupPresence();
@@ -285,6 +290,12 @@ async function checkMediaMsg(){
     mediaMsgReady = !q.error;
   } catch(e){ mediaMsgReady = false; }
 }
+async function checkMediaMsgV2(){
+  try {
+    const q = await supa.from('messages').select('file_bytes,hidden_for').limit(1);
+    mediaMsgV2Ready = !q.error;
+  } catch(e){ mediaMsgV2Ready = false; }
+}
 
 /* ---------------- Data fetchers ---------------- */
 function mapPost(p){
@@ -363,6 +374,7 @@ async function fetchConversations(){
   if(q.error){ console.error(q.error); return []; }
   const byPartner = {};
   (q.data || []).forEach(function(m){
+    if(m.hidden_for && m.hidden_for.indexOf(me.id) !== -1) return;
     const partner = m.sender_id === me.id ? m.recipient_id : m.sender_id;
     const partnerProfile = m.sender_id === me.id ? m.recipient : m.sender;
     if(!byPartner[partner]){
@@ -719,7 +731,9 @@ async function fetchThread(){
     .or('and(sender_id.eq.' + me.id + ',recipient_id.eq.' + activeChat + '),and(sender_id.eq.' + activeChat + ',recipient_id.eq.' + me.id + '))')
     .order('created_at', { ascending: true })
     .limit(300);
-  chatThread = q.error ? [] : (q.data || []);
+  chatThread = q.error ? [] : (q.data || []).filter(function(m){
+    return !(m.hidden_for && m.hidden_for.indexOf(me.id) !== -1);
+  });
 }
 
 function partnerProfile(uid){
@@ -729,6 +743,8 @@ function partnerProfile(uid){
 
 function renderChat(){
   const c = partnerProfile(activeChat);
+  var prevInput = document.getElementById('chat-input');
+  var prevText = prevInput ? prevInput.value : '';
   document.getElementById('main-col').innerHTML =
     '<div class="chat-head">'
       + '<button onclick="activeChat=null;renderMessages();updateBadges();"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>'
@@ -737,8 +753,20 @@ function renderChat(){
     + '</div>'
     + '<div class="chat-thread" id="chat-thread">'
     + (chatThread.length ? chatThread.map(function(m){
-        return '<div class="bubble ' + (m.sender_id === me.id ? 'me' : 'them') + '">' + renderMsgBody(m) + '</div>';
+        var mine = m.sender_id === me.id;
+        return '<div class="msg-wrap ' + (mine ? 'me' : 'them') + '">'
+          + '<div class="bubble ' + (mine ? 'me' : 'them') + '">' + renderMsgBody(m) + '</div>'
+          + (m.id ? '<button class="msg-del" title="Delete" onclick="openMsgMenu(\'' + m.id + '\')">&times;</button>' : '')
+        + '</div>';
       }).join('') : '<div class="empty-note">Say hi!</div>')
+    + '</div>'
+    + '<div class="staged-file-row" id="staged-file-row" style="' + (pendingChatFile ? 'display:flex' : 'display:none') + '">'
+      + '<span class="sf-chip">'
+        + '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>'
+        + '<span class="sf-name">' + esc(pendingChatFile ? (pendingChatFile.name || 'File') : '') + '</span>'
+        + '<button class="sf-x" title="Remove" onclick="clearStagedFile()">&times;</button>'
+      + '</span>'
+      + '<span class="sf-hint">Tap Send to deliver</span>'
     + '</div>'
     + '<div class="chat-input-row">'
       + '<button class="attach-btn" title="Send a photo, video, audio or file" onclick="document.getElementById(\'chat-file-input\').click()">'
@@ -747,7 +775,16 @@ function renderChat(){
       + '<input id="chat-input" placeholder="Message..." onkeydown="if(event.key===\'Enter\')sendChat()">'
       + '<button onclick="sendChat()">Send</button>'
     + '</div>'
-    + '<input type="file" id="chat-file-input" style="display:none" onchange="onChatFile()">';
+    + '<input type="file" id="chat-file-input" style="display:none" onchange="onChatFile()">'
+    + (msgMenuId ? '<div class="modal-overlay open" id="msg-menu" style="z-index:350;" onclick="if(event.target===this)closeMsgMenu()">'
+      + '<div class="modal" style="max-width:300px;"><div class="modal-body" style="display:flex;flex-direction:column;gap:10px;padding:18px 16px;">'
+        + '<div style="font-size:13.5px;color:var(--text-soft);text-align:center;">Delete this message?</div>'
+        + (msgMenuMine ? '<button class="share-btn" style="margin-top:0;background:var(--like);" onclick="deleteMsgForEveryone(msgMenuId)">Delete for everyone</button>' : '')
+        + '<button class="share-btn" style="margin-top:0;" onclick="deleteMsgForMe(msgMenuId)">Delete for me</button>'
+        + '<button class="ghost-btn" style="margin-top:0;" onclick="closeMsgMenu()">Cancel</button>'
+      + '</div></div></div>' : '');
+  var ci = document.getElementById('chat-input');
+  if(ci && prevText) ci.value = prevText;
   updatePresenceDots();
   const thread = document.getElementById('chat-thread');
   if(thread) thread.scrollTop = thread.scrollHeight;
@@ -756,9 +793,17 @@ function renderChat(){
 function sendChat(){
   const input = document.getElementById('chat-input');
   const text = (input.value || '').trim();
-  if(!text) return;
+  if(!pendingChatFile && !text) return;
+  if(pendingChatFile){
+    sendChatFile(pendingChatFile, text);
+    return;
+  }
   input.value = '';
   sendMessage(activeChat, text);
+}
+function clearStagedFile(){
+  pendingChatFile = null;
+  renderChat();
 }
 
 async function sendMessage(partnerId, text){
@@ -820,23 +865,34 @@ function onChatFile(){
   if(f) f.value = '';
   if(!file || !activeChat) return;
   if(!mediaMsgReady){ toast('File messages need a one-time SQL update — see media-messages.sql'); return; }
-  if(file.size > 50 * 1024 * 1024){ toast('File is too big (max 50 MB)'); return; }
-  sendChatFile(file);
+  if(file.size > 12.5 * 1024 * 1024){
+    toast('"' + (file.name || 'File') + '" is too big — the limit is 12.5 MB. It was not attached.');
+    return;
+  }
+  pendingChatFile = file;
+  renderChat();
+  toast('File attached — tap Send to deliver it');
 }
-async function sendChatFile(file){
+async function sendChatFile(file, text){
   var t = (file.type || '').split('/')[0];
   var mediaType = 'file';
   if(t === 'image') mediaType = 'image';
   else if(t === 'video') mediaType = 'video';
   else if(t === 'audio') mediaType = 'audio';
+  var inputEl = document.getElementById('chat-input');
+  if(inputEl) inputEl.value = '';
+  pendingChatFile = null;
+  text = (text || '').trim();
   toast('Uploading ' + (file.name || 'file') + '\u2026');
   try {
     var url = await uploadMsgFile(file);
-    var r = await supa.from('messages').insert({
-      sender_id: me.id, recipient_id: activeChat, text: '',
+    var payload = {
+      sender_id: me.id, recipient_id: activeChat, text: text || '',
       media_url: url, media_type: mediaType,
       media_name: (file.name || '').slice(0, 120) || null
-    });
+    };
+    if(mediaMsgV2Ready) payload.file_bytes = file.size || null;
+    var r = await supa.from('messages').insert(payload);
     if(r.error) throw r.error;
     await fetchThread();
     renderChat();
@@ -845,6 +901,39 @@ async function sendChatFile(file){
     console.error(err);
     toast('Could not send the file');
   }
+}
+
+/* ---- message delete menu (for everyone / for me) ---- */
+function openMsgMenu(id){
+  var m = null;
+  for(var i=0;i<chatThread.length;i++){ if(chatThread[i].id === id){ m = chatThread[i]; break; } }
+  if(!m) return;
+  msgMenuId = id;
+  msgMenuMine = m.sender_id === me.id;
+  renderChat();
+}
+function closeMsgMenu(){
+  msgMenuId = null;
+  renderChat();
+}
+async function deleteMsgForEveryone(id){
+  msgMenuId = null;
+  var r = await supa.from('messages').delete().eq('id', id);
+  if(r.error){ toast('Could not delete the message'); renderChat(); return; }
+  await fetchThread();
+  renderChat();
+  scheduleConvRefresh();
+  toast('Deleted for everyone');
+}
+async function deleteMsgForMe(id){
+  msgMenuId = null;
+  if(!mediaMsgV2Ready){ toast('Needs a one-time SQL update — see media-messages-v2.sql'); renderChat(); return; }
+  var r = await supa.rpc('hide_message_for_me', { msg_id: id });
+  if(r.error){ toast('Could not delete the message'); renderChat(); return; }
+  await fetchThread();
+  renderChat();
+  scheduleConvRefresh();
+  toast('Deleted for you');
 }
 
 /* ---------------- Notifications ---------------- */
