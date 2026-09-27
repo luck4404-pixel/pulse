@@ -708,6 +708,22 @@
   </div>
 </div>
 
+<!-- Add email to a quick account -->
+<div class="modal-overlay" id="add-email-modal" onclick="if(event.target===this)closeAddEmail()">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-head"><h3>Add an email to your account</h3><button onclick="closeAddEmail()">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-soft);margin:0 0 4px;line-height:1.5;">Add an email and password so you can log back into this account on any device. Everything — posts, messages, follows — stays exactly the same.</p>
+      <label class="field-label">Email</label>
+      <input id="ae-email" type="email" placeholder="you@example.com">
+      <label class="field-label">Password</label>
+      <input id="ae-password" type="password" placeholder="at least 6 characters">
+      <button class="share-btn" id="ae-submit" onclick="submitAddEmail()">Add email</button>
+      <button class="ghost-btn" onclick="closeAddEmail()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Email sign up / log in -->
 <div class="modal-overlay" id="email-auth-modal" onclick="if(event.target===this)closeEmailAuth()">
   <div class="modal" style="max-width:380px;">
@@ -763,6 +779,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
