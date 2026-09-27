@@ -1244,16 +1244,22 @@ function setCreateTab(tab){
   document.getElementById('share-btn').textContent = tab === 'post' ? 'Share' : 'Add to story';
 }
 function closeCreateModal(){
+  stopPreview();
   document.getElementById('create-modal').classList.remove('open');
   document.getElementById('drop-zone').style.display = 'flex';
-  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('preview-wrap').style.display = 'none';
   document.getElementById('caption-input').value = '';
   document.getElementById('file-input').value = '';
   document.getElementById('share-btn').disabled = true;
   pendingImage = null;
   pendingSong = null;
   document.getElementById('editor-tools').style.display = 'none';
+  document.getElementById('crop-tools').style.display = 'none';
+  var cb = document.getElementById('crop-box');
+  if(cb) cb.style.display = 'none';
+  cropMode = false;
   edSource = null;
+  edOriginal = null;
   edReset();
   renderMusicRow();
 }
@@ -1267,6 +1273,7 @@ document.getElementById('file-input').addEventListener('change', function(e){
     const img = document.getElementById('preview-img');
     img.src = pendingImage.dataUrl;
     img.style.display = 'block';
+    document.getElementById('preview-wrap').style.display = 'block';
     document.getElementById('drop-zone').style.display = 'none';
     document.getElementById('share-btn').disabled = false;
     edInit(img);
@@ -1276,13 +1283,30 @@ document.getElementById('file-input').addEventListener('change', function(e){
 
 /* ---------------- Photo editor (brightness / color / zoom) ---------------- */
 var ed = { bright: 100, contrast: 100, sat: 100, zoom: 100, x: 0, y: 0, edited: false };
-var edSource = null;   // {img, w, h} — the original image
+var edSource = null;   // {img, w, h} — the current (possibly cropped) image
 var edDrag = null;
+var edOriginal = null;          // untouched original {img, w, h}
+var edCropOff = { x: 0, y: 0 }; // where the current source sits inside the original
+var cropMode = false;
+var edRatio = 0;        // 0 = free, else width/height
+var cropBox = null;     // {x, y, w, h} in display pixels
 
-function edDisplayRatio(){
+function edDispRect(){
+  var wrap = document.getElementById('preview-wrap');
   var img = document.getElementById('preview-img');
-  if(!img || !edSource || !edSource.w) return 1;
-  return img.clientWidth / edSource.w;
+  if(!wrap || !img || !edSource || !edSource.w || !edSource.h) return null;
+  var elW = wrap.clientWidth;
+  var elH = img.clientHeight;
+  if(!elW || !elH) return null;
+  var ar = edSource.w / edSource.h;
+  var dispW, dispH;
+  if(elW / elH > ar){ dispH = elH; dispW = elH * ar; }
+  else { dispW = elW; dispH = elW / ar; }
+  return { x: (elW - dispW) / 2, y: (elH - dispH) / 2, w: dispW, h: dispH };
+}
+function edDisplayRatio(){
+  var rc = edDispRect();
+  return rc ? rc.w / edSource.w : 1;
 }
 function edClampPan(){
   if(!edSource) return;
@@ -1324,14 +1348,24 @@ function edEnhance(){
 }
 function edReset(){
   ed.bright = 100; ed.contrast = 100; ed.sat = 100; ed.zoom = 100; ed.x = 0; ed.y = 0; ed.edited = false;
+  if(edOriginal){
+    edCropOff = { x: 0, y: 0 };
+    edSource = { img: edOriginal.img, w: edOriginal.w, h: edOriginal.h };
+  }
   edSyncSliders();
   edApplyPreview();
 }
 function edInit(imgEl){
-  edReset();
+  edOriginal = null;
   edSource = null;
+  edReset();
   var img = new Image();
-  img.onload = function(){ edSource = { img: img, w: img.naturalWidth, h: img.naturalHeight }; edApplyPreview(); };
+  img.onload = function(){
+    edOriginal = { img: img, w: img.naturalWidth, h: img.naturalHeight };
+    edSource = { img: img, w: img.naturalWidth, h: img.naturalHeight };
+    edCropOff = { x: 0, y: 0 };
+    edApplyPreview();
+  };
   img.src = imgEl.src;
   var tools = document.getElementById('editor-tools');
   if(tools) tools.style.display = 'block';
@@ -1341,7 +1375,7 @@ function edInit(imgEl){
   if(!img) return;
   function endDrag(){ edDrag = null; img.style.cursor = ed.zoom > 100 ? 'grab' : 'default'; }
   img.addEventListener('pointerdown', function(e){
-    if(!edSource || ed.zoom <= 100) return;
+    if(cropMode || !edSource || ed.zoom <= 100) return;
     edDrag = { sx: e.clientX, sy: e.clientY, x0: ed.x, y0: ed.y };
     try { img.setPointerCapture(e.pointerId); } catch(err){}
     img.style.cursor = 'grabbing';
@@ -1359,6 +1393,187 @@ function edInit(imgEl){
   });
   img.addEventListener('pointerup', endDrag);
   img.addEventListener('pointercancel', endDrag);
+})();
+
+/* ---------------- Crop (ratio presets + freehand area selection) ---------------- */
+function cropZoneHit(px, py){
+  var T = 24;
+  var b = cropBox;
+  var nearL = Math.abs(px - b.x) <= T, nearR = Math.abs(px - (b.x + b.w)) <= T;
+  var nearT = Math.abs(py - b.y) <= T, nearB = Math.abs(py - (b.y + b.h)) <= T;
+  if(nearT && nearL) return 'nw';
+  if(nearT && nearR) return 'ne';
+  if(nearB && nearL) return 'sw';
+  if(nearB && nearR) return 'se';
+  if(nearT) return 'n';
+  if(nearB) return 's';
+  if(nearL) return 'w';
+  if(nearR) return 'e';
+  if(px > b.x && px < b.x + b.w && py > b.y && py < b.y + b.h) return 'move';
+  return 'new';
+}
+function renderCropBox(){
+  var el = document.getElementById('crop-box');
+  if(!el || !cropBox) return;
+  var rc = edDispRect();
+  if(!rc) return;
+  el.style.left = (rc.x + cropBox.x) + 'px';
+  el.style.top = (rc.y + cropBox.y) + 'px';
+  el.style.width = cropBox.w + 'px';
+  el.style.height = cropBox.h + 'px';
+}
+function edCropStart(){
+  if(!edSource){ toast('Pick a photo first'); return; }
+  var rc = edDispRect();
+  if(!rc) return;
+  cropMode = true;
+  edRatio = 0;
+  var img = document.getElementById('preview-img');
+  img.style.transform = '';
+  img.style.cursor = 'default';
+  document.getElementById('editor-tools').style.display = 'none';
+  document.getElementById('crop-tools').style.display = 'block';
+  var chips = document.querySelectorAll('.crop-chip');
+  for(var i=0;i<chips.length;i++) chips[i].classList.toggle('active', parseFloat(chips[i].getAttribute('data-r')) === 0);
+  cropBox = { x: 0, y: 0, w: rc.w, h: rc.h };
+  document.getElementById('crop-box').style.display = 'block';
+  renderCropBox();
+}
+function cropCancel(){
+  cropMode = false;
+  var el = document.getElementById('crop-box');
+  if(el) el.style.display = 'none';
+  document.getElementById('crop-tools').style.display = 'none';
+  document.getElementById('editor-tools').style.display = 'block';
+  edApplyPreview();
+}
+function cropSetRatio(r){
+  edRatio = r;
+  var chips = document.querySelectorAll('.crop-chip');
+  for(var i=0;i<chips.length;i++) chips[i].classList.toggle('active', Math.abs(parseFloat(chips[i].getAttribute('data-r')) - r) < 0.001);
+  if(!r) return;
+  var rc = edDispRect();
+  if(!rc) return;
+  var w = rc.w, h = w / r;
+  if(h > rc.h){ h = rc.h; w = h * r; }
+  cropBox = { x: (rc.w - w) / 2, y: (rc.h - h) / 2, w: w, h: h };
+  renderCropBox();
+}
+function cropApply(){
+  if(!edSource || !cropBox){ cropCancel(); return; }
+  var rc = edDispRect();
+  if(!rc){ cropCancel(); return; }
+  var rr = rc.w / edSource.w;
+  var sx = cropBox.x / rr, sy = cropBox.y / rr;
+  var sw = Math.min(cropBox.w / rr, edSource.w - sx);
+  var sh = Math.min(cropBox.h / rr, edSource.h - sy);
+  if(sw < 16 || sh < 16){ toast('Crop area is too small'); return; }
+  var cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(sw));
+  cv.height = Math.max(1, Math.round(sh));
+  cv.getContext('2d').drawImage(edSource.img, Math.round(sx), Math.round(sy), cv.width, cv.height, 0, 0, cv.width, cv.height);
+  edCropOff.x += Math.round(sx);
+  edCropOff.y += Math.round(sy);
+  edSource = { img: cv, w: cv.width, h: cv.height };
+  ed.zoom = 100; ed.x = 0; ed.y = 0; ed.edited = true;
+  cropMode = false;
+  document.getElementById('crop-box').style.display = 'none';
+  document.getElementById('crop-tools').style.display = 'none';
+  document.getElementById('editor-tools').style.display = 'block';
+  edApplyPreview();
+  toast('Cropped ✂');
+}
+function cropResize(zone, drag, px, py){
+  var rc = edDispRect();
+  if(!rc) return;
+  var W = rc.w, H = rc.h;
+  px = Math.max(0, Math.min(W, px));
+  py = Math.max(0, Math.min(H, py));
+  var b = drag.box, R = edRatio, ax, ay;
+  if(zone === 'nw'){ ax = b.x + b.w; ay = b.y + b.h; }
+  else if(zone === 'ne'){ ax = b.x; ay = b.y + b.h; }
+  else if(zone === 'sw'){ ax = b.x + b.w; ay = b.y; }
+  else if(zone === 'se'){ ax = b.x; ay = b.y; }
+  else if(zone === 'n'){ ax = b.x + b.w / 2; ay = b.y + b.h; }
+  else if(zone === 's'){ ax = b.x + b.w / 2; ay = b.y; }
+  else if(zone === 'w'){ ax = b.x + b.w; ay = b.y + b.h / 2; }
+  else { ax = b.x; ay = b.y + b.h / 2; }
+  var w, h;
+  if(zone === 'n' || zone === 's'){ h = Math.abs(py - ay); w = R ? h * R : b.w; }
+  else if(zone === 'w' || zone === 'e'){ w = Math.abs(px - ax); h = R ? w / R : b.h; }
+  else {
+    var dx = Math.abs(px - ax), dy = Math.abs(py - ay);
+    if(R){ w = Math.max(dx, dy * R); h = w / R; }
+    else { w = dx; h = dy; }
+  }
+  var dirX = (zone === 'n' || zone === 's') ? 0 : (px >= ax ? 1 : -1);
+  var dirY = (zone === 'w' || zone === 'e') ? 0 : (py >= ay ? 1 : -1);
+  var x = dirX === 0 ? ax - w / 2 : (dirX > 0 ? ax : ax - w);
+  var y = dirY === 0 ? ay - h / 2 : (dirY > 0 ? ay : ay - h);
+  if(x < 0) x = 0;
+  if(y < 0) y = 0;
+  if(x + w > W) x = Math.max(0, W - w);
+  if(y + h > H) y = Math.max(0, H - h);
+  if(x + w > W) w = W - x;
+  if(y + h > H) h = H - y;
+  cropBox = { x: x, y: y, w: Math.max(12, w), h: Math.max(12, h) };
+}
+(function(){
+  var wrap = document.getElementById('preview-wrap');
+  if(!wrap) return;
+  var drag = null;
+  function rel(e){
+    var rc = edDispRect();
+    var wr = wrap.getBoundingClientRect();
+    return { x: e.clientX - wr.left - (rc ? rc.x : 0), y: e.clientY - wr.top - (rc ? rc.y : 0) };
+  }
+  function up(){
+    if(!drag) return;
+    if(drag.zone === 'new' && cropBox && (cropBox.w < 20 || cropBox.h < 20)){
+      cropBox = drag.box;
+      renderCropBox();
+    }
+    drag = null;
+  }
+  wrap.addEventListener('pointerdown', function(e){
+    if(!cropMode || !edSource) return;
+    var rc = edDispRect();
+    if(!rc) return;
+    var p = rel(e);
+    p.x = Math.max(0, Math.min(rc.w, p.x));
+    p.y = Math.max(0, Math.min(rc.h, p.y));
+    var zone = cropZoneHit(p.x, p.y);
+    drag = { zone: zone, px: p.x, py: p.y, box: { x: cropBox.x, y: cropBox.y, w: cropBox.w, h: cropBox.h } };
+    try { wrap.setPointerCapture(e.pointerId); } catch(err){}
+    e.preventDefault();
+  });
+  wrap.addEventListener('pointermove', function(e){
+    if(!drag || !cropMode) return;
+    var rc = edDispRect();
+    if(!rc) return;
+    var p = rel(e);
+    p.x = Math.max(0, Math.min(rc.w, p.x));
+    p.y = Math.max(0, Math.min(rc.h, p.y));
+    if(drag.zone === 'move'){
+      var nx = Math.max(0, Math.min(rc.w - drag.box.w, drag.box.x + (p.x - drag.px)));
+      var ny = Math.max(0, Math.min(rc.h - drag.box.h, drag.box.y + (p.y - drag.py)));
+      cropBox = { x: nx, y: ny, w: drag.box.w, h: drag.box.h };
+    } else if(drag.zone === 'new'){
+      var x = Math.min(drag.px, p.x), y = Math.min(drag.py, p.y);
+      var w = Math.abs(p.x - drag.px), h = Math.abs(p.y - drag.py);
+      if(edRatio){ w = Math.max(w, h * edRatio); h = w / edRatio; }
+      if(drag.px > p.x) x = drag.px - w;
+      if(drag.py > p.y) y = drag.py - h;
+      x = Math.max(0, Math.min(rc.w - 12, x));
+      y = Math.max(0, Math.min(rc.h - 12, y));
+      cropBox = { x: x, y: y, w: Math.max(12, Math.min(w, rc.w - x)), h: Math.max(12, Math.min(h, rc.h - y)) };
+    } else {
+      cropResize(drag.zone, drag, p.x, p.y);
+    }
+    renderCropBox();
+  });
+  wrap.addEventListener('pointerup', up);
+  wrap.addEventListener('pointercancel', up);
 })();
 
 function edFilterPixels(imgData){
@@ -1589,6 +1804,7 @@ async function publishCreate(){
   if(!pendingImage || !pendingImage.file) return;
   const btn = document.getElementById('share-btn');
   btn.disabled = true; btn.textContent = 'Uploading...';
+  stopPreview();
   try {
     var audioUrl = null;
     if(pendingSong && musicReady){
