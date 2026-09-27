@@ -556,10 +556,10 @@ function togglePostAudio(id){
   currentAudio.play().then(function(){
     playingAudioPostId = id;
     if(p.audioStart > 0){ try{ currentAudio.currentTime = p.audioStart; }catch(e){} }
-    var chip = document.getElementById('mc-' + id);
-    if(chip) chip.classList.add('playing');
-    var spk = document.getElementById('spk-' + id);
-    if(spk) spk.classList.add('playing');
+    var chips = document.querySelectorAll('#mc-' + id);
+    for(var ci=0;ci<chips.length;ci++) chips[ci].classList.add('playing');
+    var spks = document.querySelectorAll('#spk-' + id);
+    for(var si=0;si<spks.length;si++) spks[si].classList.add('playing');
   }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
 }
 
@@ -659,6 +659,14 @@ function renderMessages(){
 
 async function openChat(uid){
   activeChat = uid;
+  if(!conversations.some(function(c){ return c.uid === uid; })){
+    try {
+      var q = await supa.from('profiles').select('id,username,avatar_url').eq('id', uid).maybeSingle();
+      if(q.data){
+        conversations.push({ uid: uid, user: q.data.username, avatar: q.data.avatar_url, last: '', lastTime: new Date().toISOString(), lastFromMe: false, unread: false });
+      }
+    } catch(e){}
+  }
   await markChatRead(uid);
   await fetchThread();
   renderChat();
@@ -1040,7 +1048,7 @@ const SV_MUSIC_DURATION = 8000;
 function stopStoryAudio(){
   if(svAudio){ try{ svAudio.pause(); }catch(e){} svAudio = null; }
   var st = document.getElementById('sv-music-sticker');
-  if(st) st.style.display = 'none';
+  if(st){ st.style.display = 'none'; st.classList.remove('playing'); }
 }
 
 function getStoryUser(u){
@@ -1066,6 +1074,8 @@ function openStoryViewer(u){
 }
 
 function svKeyHandler(e){
+  var t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
   if(e.key === 'ArrowRight') storyNext();
   else if(e.key === 'ArrowLeft') storyPrev();
   else if(e.key === 'Escape') closeStoryViewer();
@@ -1096,6 +1106,7 @@ function playStory(){
       svAudio = new Audio(item.audio);
       svAudio.play().then(function(){
         if(item.audioStart > 0){ try{ svAudio.currentTime = item.audioStart; }catch(e){} }
+        if(sticker) sticker.classList.add('playing');
       }).catch(function(){});
     } catch(e){ svAudio = null; }
   } else if(sticker){
@@ -1241,6 +1252,9 @@ function closeCreateModal(){
   document.getElementById('share-btn').disabled = true;
   pendingImage = null;
   pendingSong = null;
+  document.getElementById('editor-tools').style.display = 'none';
+  edSource = null;
+  edReset();
   renderMusicRow();
 }
 document.getElementById('file-input').addEventListener('change', function(e){
@@ -1255,9 +1269,143 @@ document.getElementById('file-input').addEventListener('change', function(e){
     img.style.display = 'block';
     document.getElementById('drop-zone').style.display = 'none';
     document.getElementById('share-btn').disabled = false;
+    edInit(img);
   };
   reader.readAsDataURL(file);
 });
+
+/* ---------------- Photo editor (brightness / color / zoom) ---------------- */
+var ed = { bright: 100, contrast: 100, sat: 100, zoom: 100, x: 0, y: 0, edited: false };
+var edSource = null;   // {img, w, h} — the original image
+var edDrag = null;
+
+function edDisplayRatio(){
+  var img = document.getElementById('preview-img');
+  if(!img || !edSource || !edSource.w) return 1;
+  return img.clientWidth / edSource.w;
+}
+function edClampPan(){
+  if(!edSource) return;
+  var z = ed.zoom / 100;
+  var mx = Math.max(0, (z - 1) * edSource.w / 2);
+  var my = Math.max(0, (z - 1) * edSource.h / 2);
+  ed.x = Math.max(-mx, Math.min(mx, ed.x));
+  ed.y = Math.max(-my, Math.min(my, ed.y));
+}
+function edApplyPreview(){
+  var img = document.getElementById('preview-img');
+  if(!img) return;
+  img.style.filter = 'brightness(' + ed.bright + '%) contrast(' + ed.contrast + '%) saturate(' + ed.sat + '%)';
+  var r = edDisplayRatio();
+  img.style.transform = 'translate(' + (ed.x * r).toFixed(2) + 'px,' + (ed.y * r).toFixed(2) + 'px) scale(' + (ed.zoom / 100) + ')';
+  img.style.cursor = ed.zoom > 100 ? 'grab' : 'default';
+}
+function edSyncSliders(){
+  ['bright','contrast','sat','zoom'].forEach(function(k){
+    var s = document.getElementById('ed-' + k);
+    if(s) s.value = ed[k];
+    var lbl = document.getElementById('ed-' + k + '-v');
+    if(lbl) lbl.textContent = Math.round(ed[k]);
+  });
+}
+function onEdSlider(key, val){
+  ed[key] = parseFloat(val) || 100;
+  if(key === 'zoom') edClampPan();
+  ed.edited = true;
+  edSyncSliders();
+  edApplyPreview();
+}
+function edEnhance(){
+  ed.bright = 106; ed.contrast = 112; ed.sat = 118;
+  ed.edited = true;
+  edSyncSliders();
+  edApplyPreview();
+  toast('Enhanced ✨');
+}
+function edReset(){
+  ed.bright = 100; ed.contrast = 100; ed.sat = 100; ed.zoom = 100; ed.x = 0; ed.y = 0; ed.edited = false;
+  edSyncSliders();
+  edApplyPreview();
+}
+function edInit(imgEl){
+  edReset();
+  edSource = null;
+  var img = new Image();
+  img.onload = function(){ edSource = { img: img, w: img.naturalWidth, h: img.naturalHeight }; edApplyPreview(); };
+  img.src = imgEl.src;
+  var tools = document.getElementById('editor-tools');
+  if(tools) tools.style.display = 'block';
+}
+(function(){
+  var img = document.getElementById('preview-img');
+  if(!img) return;
+  function endDrag(){ edDrag = null; img.style.cursor = ed.zoom > 100 ? 'grab' : 'default'; }
+  img.addEventListener('pointerdown', function(e){
+    if(!edSource || ed.zoom <= 100) return;
+    edDrag = { sx: e.clientX, sy: e.clientY, x0: ed.x, y0: ed.y };
+    try { img.setPointerCapture(e.pointerId); } catch(err){}
+    img.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  img.addEventListener('pointermove', function(e){
+    if(!edDrag) return;
+    var r = edDisplayRatio();
+    if(!r) return;
+    ed.x = edDrag.x0 + (e.clientX - edDrag.sx) / r;
+    ed.y = edDrag.y0 + (e.clientY - edDrag.sy) / r;
+    edClampPan();
+    ed.edited = true;
+    edApplyPreview();
+  });
+  img.addEventListener('pointerup', endDrag);
+  img.addEventListener('pointercancel', endDrag);
+})();
+
+function edFilterPixels(imgData){
+  var b = ed.bright / 100;
+  var c = ed.contrast - 100;
+  var m = ed.sat / 100;
+  if(b === 1 && c === 0 && m === 1) return;
+  var k = (259 * (c + 255)) / (255 * (259 - c));
+  var d = imgData.data;
+  for(var i = 0; i < d.length; i += 4){
+    var r = d[i] * b, g = d[i+1] * b, bl = d[i+2] * b;
+    r = (r - 128) * k + 128; g = (g - 128) * k + 128; bl = (bl - 128) * k + 128;
+    if(m !== 1){
+      var lu = 0.3 * r + 0.59 * g + 0.11 * bl;
+      r = lu + (r - lu) * m; g = lu + (g - lu) * m; bl = lu + (bl - lu) * m;
+    }
+    d[i]   = r < 0 ? 0 : r > 255 ? 255 : r;
+    d[i+1] = g < 0 ? 0 : g > 255 ? 255 : g;
+    d[i+2] = bl < 0 ? 0 : bl > 255 ? 255 : bl;
+  }
+}
+async function getEditedFile(){
+  if(!pendingImage || !pendingImage.file) return null;
+  if(!ed.edited || !edSource) return pendingImage.file;
+  try {
+    var MAX = 1440;
+    var sw = edSource.w, sh = edSource.h;
+    var sc = Math.min(1, MAX / Math.max(sw, sh));
+    var w = Math.max(1, Math.round(sw * sc)), h = Math.max(1, Math.round(sh * sc));
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    var z = ed.zoom / 100;
+    ctx.translate(w / 2 + ed.x * sc, h / 2 + ed.y * sc);
+    ctx.scale(z * sc, z * sc);
+    ctx.drawImage(edSource.img, -sw / 2, -sh / 2);
+    var data = ctx.getImageData(0, 0, w, h);
+    edFilterPixels(data);
+    ctx.putImageData(data, 0, 0);
+    var blob = await new Promise(function(res){ cv.toBlob(res, 'image/jpeg', 0.92); });
+    if(!blob) return pendingImage.file;
+    return new File([blob], 'photo-edited.jpg', { type: 'image/jpeg' });
+  } catch(err){
+    console.error(err);
+    return pendingImage.file;
+  }
+}
 
 function openMusicPicker(){
   if(musicReady === false || songsReady === false){
@@ -1446,7 +1594,7 @@ async function publishCreate(){
     if(pendingSong && musicReady){
       audioUrl = pendingSong.url;
     }
-    const url = await uploadImage(pendingImage.file);
+    const url = await uploadImage(await getEditedFile());
     if(createTab === 'post'){
       const caption = document.getElementById('caption-input').value.trim();
       var payload = { user_id: me.id, image_url: url, caption: caption || null };
