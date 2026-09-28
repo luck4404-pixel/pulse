@@ -67,9 +67,10 @@
     font-family:'Poppins',sans-serif;font-weight:700;font-size:22px;letter-spacing:.2px;
     background:var(--ring);
     -webkit-background-clip:text;background-clip:text;color:transparent;
-    flex-shrink:0;display:flex;align-items:center;gap:7px;
+    flex-shrink:0;display:flex;align-items:center;gap:14px;
   }
   .logo svg{flex-shrink:0;}
+  @media(max-width:699px){ .logo svg{width:48px;height:48px;} }
   .search{
     display:none;
     align-items:center;gap:8px;
@@ -565,7 +566,7 @@
 
 <div class="topbar">
   <div class="topbar-inner">
-    <a class="logo" href="#" onclick="showView('feed');return false;"><svg viewBox="0 0 48 48" width="32" height="32" aria-hidden="true"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg1)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Pulse</a>
+    <a class="logo" href="#" onclick="showView('feed');return false;"><svg viewBox="0 0 48 48" width="60" height="60" aria-hidden="true"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg1)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Pulse</a>
     <div class="search">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="search-top" placeholder="Search" oninput="onSearch(this.value,this)" onfocus="showView('explore')">
