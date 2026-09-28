@@ -128,6 +128,8 @@ let pendingObAvatarFile = null; // onboarding avatar
 let emailAuthMode = 'signup';  // 'signup' | 'login'
 let myEmail = null;          // email attached to this account (null = quick/anonymous account)
 let refreshing = false;
+let feedLoaded = false;    // has the feed been painted at least once
+let probeCache = null;     // cached feature-probe results (localStorage)
 let presenceChannel = null;
 
 /* ---------------- Auth & boot ---------------- */
@@ -166,17 +168,18 @@ async function boot(){
 
 async function afterLogin(){
   updateMeUI();
-  await Promise.all([loadFollows(), loadSavedIds(), loadSuggestions()]);
-  await checkMusicColumns();
-  await checkSongTable();
-  await checkMusicStart();
-  await checkStoryLikes();
-  await checkMediaMsg();
-  await checkMediaMsgV2();
+  loadProbeCache();
+  showView('feed'); // paint the feed area instantly while data loads
+  if(probeCache){
+    runProbes(); // returning user: cached results already applied, re-verify quietly
+  } else {
+    await runProbes(); // first visit: one parallel round of probes
+  }
+  await Promise.all([loadFollows(), loadSavedIds()]);
+  loadSuggestions(); // side column — never blocks the feed
   await refreshData();
   setupRealtime();
   setupPresence();
-  showView('feed');
 }
 
 function updateMeUI(){
@@ -415,6 +418,37 @@ async function checkMediaMsgV2(){
   } catch(e){ mediaMsgV2Ready = false; }
 }
 
+/* ---- one parallel probe round instead of 7 sequential ones ---- */
+async function runProbes(){
+  await Promise.all([
+    checkMusicColumns(), checkSongTable(), checkMusicStart(),
+    checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2()
+  ]);
+  saveProbeCache();
+}
+/* returning users skip the probe round-trip entirely (cached in localStorage),
+   the probes quietly re-verify in the background */
+function loadProbeCache(){
+  try { probeCache = JSON.parse(localStorage.getItem('pulse-probes-v1') || 'null'); } catch(e){ probeCache = null; }
+  if(probeCache){
+    musicReady = probeCache.musicReady;
+    songsReady = probeCache.songsReady;
+    musicStartReady = probeCache.musicStartReady;
+    storyLikesReady = probeCache.storyLikesReady;
+    mediaMsgReady = probeCache.mediaMsgReady;
+    mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
+  }
+}
+function saveProbeCache(){
+  try {
+    localStorage.setItem('pulse-probes-v1', JSON.stringify({
+      musicReady: musicReady, songsReady: songsReady,
+      musicStartReady: musicStartReady, storyLikesReady: storyLikesReady,
+      mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready
+    }));
+  } catch(e){}
+}
+
 /* ---------------- Data fetchers ---------------- */
 function mapPost(p){
   return {
@@ -449,13 +483,28 @@ async function fetchFeed(limit){
   return q.data.map(mapPost);
 }
 
+/* Explore ranking: likes + a gentle freshness boost; your own posts are
+   shown less often so Explore feels like discovery, not your own grid */
+function rankExplore(list){
+  const now = Date.now();
+  const scored = list.map(function(p){
+    const ageH = Math.max(1, (now - new Date(p.time).getTime()) / 3600000);
+    const engagement = p.likes.length + ((p.comments ? p.comments.length : 0) * 2);
+    var score = (1 + engagement) / Math.pow(ageH, 0.3);
+    if(p.uid === me.id) score *= 0.35;
+    return { p: p, s: score };
+  });
+  scored.sort(function(a, b){ return b.s - a.s; });
+  return scored.map(function(x){ return x.p; });
+}
+
 async function fetchExplorePool(){
   const q = await supa.from('posts')
     .select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(200);
   if(q.error){ console.error(q.error); return []; }
-  return q.data.map(mapPost);
+  return rankExplore(q.data.map(mapPost));
 }
 
 async function fetchSavedPosts(){
@@ -567,6 +616,14 @@ async function refreshData(){
   if(!me || refreshing) return;
   refreshing = true;
   try {
+    if(!feedLoaded){
+      // fast first paint: a small feed batch shows right away,
+      // the full data load continues right after
+      posts = await fetchFeed(12);
+      feedLoaded = true;
+      indexPosts();
+      if(currentView === 'feed') renderFeed();
+    }
     const results = await Promise.all([
       fetchFeed(40), fetchExplorePool(), fetchStories(), fetchConversations(), fetchNotifications()
     ]);
@@ -711,7 +768,9 @@ function togglePostAudio(id){
 function renderFeed(){
   document.getElementById('main-col').innerHTML =
     renderStories() + (posts.length ? posts.map(renderPost).join('') :
-    '<div class="empty-note">No posts yet.<br>Be the first — tap the + button!</div>');
+    (feedLoaded
+      ? '<div class="empty-note">No posts yet.<br>Be the first — tap the + button!</div>'
+      : '<div class="empty-note">Loading your feed…</div>'));
 }
 
 /* ---------------- Explore ---------------- */
@@ -740,7 +799,9 @@ function renderExploreGrid(){
   let pool = explorePool;
   if(term){
     pool = pool.filter(function(p){
-      return p.user.toLowerCase().indexOf(term) !== -1 || (p.caption || '').toLowerCase().indexOf(term) !== -1;
+      return p.user.toLowerCase().indexOf(term) !== -1
+        || (p.caption || '').toLowerCase().indexOf(term) !== -1
+        || ((p.audioTitle || '') + ' ' + (p.audioArtist || '')).toLowerCase().indexOf(term) !== -1;
     });
   }
   document.getElementById('explore-grid').innerHTML =
@@ -1212,7 +1273,7 @@ function markNotificationsRead(){
 
 /* ---------------- My profile ---------------- */
 async function renderProfile(){
-  const myPosts = explorePool.filter(function(p){ return p.uid === me.id; });
+  const myPosts = explorePool.filter(function(p){ return p.uid === me.id; }).sort(function(a,b){ return new Date(b.time) - new Date(a.time); });
   let savedPosts = [];
   document.getElementById('main-col').innerHTML = '<div class="empty-note">Loading profile…</div>';
   const results = await Promise.all([
