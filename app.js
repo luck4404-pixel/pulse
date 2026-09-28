@@ -788,6 +788,9 @@ function closeImageViewer(){
 function openShorts(startId){
   var pool = posts;
   if(!pool.some(function(p){ return p.id === startId; })) pool = explorePool;
+  if(!pool.some(function(p){ return p.id === startId; }) && postIndex[startId]){
+    pool = [postIndex[startId]].concat(pool);
+  }
   if(!pool.length) return;
   var startIdx = 0;
   for(var i=0;i<pool.length;i++){ if(pool[i].id === startId){ startIdx = i; break; } }
@@ -1220,6 +1223,7 @@ async function renderProfile(){
   ]);
   const postCount = results[0], followers = results[1], following = results[2];
   savedPosts = results[3];
+  savedPosts.forEach(function(p){ if(!postIndex[p.id]) postIndex[p.id] = p; });
   const shown = profileTab === 'posts' ? myPosts : savedPosts;
   document.getElementById('main-col').innerHTML =
     '<div class="profile-header">'
