@@ -366,6 +366,45 @@ async function submitAddEmail(){
   }
 }
 
+/* ---------------- Continue with Google ---------------- */
+async function googleSignIn(){
+  var redirectTo = location.origin + location.pathname;
+  try {
+    if(me && !myEmail){
+      // already signed in as a quick (no-email) account with a profile —
+      // attach Google to THIS account so all posts, messages and follows are kept
+      var link = await supa.auth.linkIdentity({ provider: 'google', options: { redirectTo: redirectTo } });
+      if(link.error){
+        var lm = String(link.error.message || '') + String(link.error.code || '');
+        if(lm.toLowerCase().indexOf('already') !== -1){
+          toast('That Google account is already linked to another Pulse account');
+        } else if(lm.toLowerCase().indexOf('enabled') !== -1 || lm.toLowerCase().indexOf('provider') !== -1){
+          toast('Google sign-in is not enabled yet — finish the setup in Supabase (Authentication \u2192 Sign In / Providers \u2192 Google)');
+        } else {
+          toast(lm || 'Could not sign in with Google');
+        }
+        return;
+      }
+      // the browser redirects away to Google and comes back — nothing else to do
+    } else {
+      var r = await supa.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo } });
+      if(r.error){
+        var m = String(r.error.message || '');
+        if(m.toLowerCase().indexOf('enabled') !== -1 || m.toLowerCase().indexOf('provider') !== -1 || m.toLowerCase().indexOf('support') !== -1){
+          toast('Google sign-in is not enabled yet — finish the setup in Supabase (Authentication \u2192 Sign In / Providers \u2192 Google)');
+        } else {
+          toast(m || 'Could not sign in with Google');
+        }
+        return;
+      }
+      // redirected to Google — on return the app logs in automatically
+    }
+  } catch(e){
+    console.error(e);
+    toast('Could not start Google sign-in');
+  }
+}
+
 /* ---------------- Storage upload ---------------- */
 async function uploadImage(file){
   const safeName = (file && file.name ? file.name : 'photo').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'photo';
@@ -692,7 +731,7 @@ function renderStories(){
       + '<div class="story-ring-inner"><img src="' + avatarOf(s) + '"></div>'
       + '</div>'
       + '<span>' + esc(u) + '</span>'
-      + '</button>';
+    + '</button>';
   }).join('');
   html += '</div>';
   return html;
@@ -2606,7 +2645,7 @@ async function postMenu(id){
 
 /* ---------------- Log out ---------------- */
 async function logout(){
-  if(!confirm('Log out? Email accounts can log back in anytime; quick (no-email) accounts cannot be signed back into.')) return;
+  if(!confirm('Log out? Email and Google accounts can log back in anytime; quick (no-email) accounts cannot be signed back into.')) return;
   try { await supa.removeAllChannels(); } catch(e){}
   try { await supa.auth.signOut(); } catch(e){}
   location.reload();
