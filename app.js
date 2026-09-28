@@ -1865,6 +1865,7 @@ document.getElementById('file-input').addEventListener('change', function(e){
 /* ---- multi-photo picker: switch / remove / thumbnails ---- */
 function snapEdit(){
   if(!pendingImages[curImgIdx]) return;
+  if(!edSource && !edOriginal) return; // nothing loaded yet — don't overwrite the photo's saved state
   pendingImages[curImgIdx].edit = {
     ed: Object.assign({}, ed),
     edSource: edSource,
@@ -1873,7 +1874,7 @@ function snapEdit(){
   };
 }
 function restoreEdit(item){
-  if(item.edit){
+  if(item.edit && item.edit.edSource){
     ed = Object.assign({}, item.edit.ed);
     edSource = item.edit.edSource;
     edOriginal = item.edit.edOriginal;
