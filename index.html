@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pulse — share the moment</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23F58529'/%3E%3Cstop offset='0.45' stop-color='%23DD2A7B'/%3E%3Cstop offset='0.7' stop-color='%238134AF'/%3E%3Cstop offset='1' stop-color='%23515BD4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='10.5' fill='url(%23g)'/%3E%3Cpolyline points='7,26 15,26 19,15.5 24,34.5 29,19 32,26 41,26' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -66,8 +67,9 @@
     font-family:'Poppins',sans-serif;font-weight:700;font-size:22px;letter-spacing:.2px;
     background:var(--ring);
     -webkit-background-clip:text;background-clip:text;color:transparent;
-    flex-shrink:0;
+    flex-shrink:0;display:flex;align-items:center;gap:7px;
   }
+  .logo svg{flex-shrink:0;}
   .search{
     display:none;
     align-items:center;gap:8px;
@@ -563,7 +565,7 @@
 
 <div class="topbar">
   <div class="topbar-inner">
-    <a class="logo" href="#" onclick="showView('feed');return false;">Pulse</a>
+    <a class="logo" href="#" onclick="showView('feed');return false;"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg1)"/><polyline points="7,26 15,26 19,15.5 24,34.5 29,19 32,26 41,26" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Pulse</a>
     <div class="search">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="search-top" placeholder="Search" oninput="onSearch(this.value,this)" onfocus="showView('explore')">
@@ -805,7 +807,7 @@
 <div class="modal-overlay open" id="onboarding-overlay" style="z-index:400;">
   <div class="modal" style="max-width:380px;">
     <div class="modal-body" style="text-align:center;padding-top:30px;">
-      <div class="logo" style="font-size:26px;display:inline-block;margin-bottom:6px;">Pulse</div>
+      <div class="logo" style="font-size:26px;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px;"><svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg2)"/><polyline points="7,26 15,26 19,15.5 24,34.5 29,19 32,26 41,26" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Pulse</div>
       <p style="color:var(--text-soft);font-size:13.5px;margin:0 0 20px;">Pick a username to get started — that's it, no password needed.</p>
       <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px;">
         <div style="width:88px;height:88px;border-radius:50%;background:var(--ring);padding:3px;">
