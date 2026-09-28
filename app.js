@@ -79,6 +79,11 @@ function debounce(fn, ms){
     t = setTimeout(function(){ fn.apply(self, args); }, ms);
   };
 }
+function multiBadge(p){
+  return (p.media && p.media.length > 1)
+    ? '<div class="cell-multi-badge"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 4H6a2 2 0 0 0-2 2v10"/></svg></div>'
+    : '';
+}
 
 /* ---------------- State ---------------- */
 let me = null;              // my profile row {id, username, display_name, avatar_url, bio}
@@ -105,7 +110,8 @@ let postModalOpenId = null;
 let lastViewedProfile = null;
 let returnView = 'feed';
 let theme = 'light';
-let pendingImage = null;   // {file, dataUrl}
+let pendingImages = [];    // up to 5 photos per post: [{file, dataUrl, edit}]
+let curImgIdx = 0;         // which photo is currently in the editor
 let createTab = 'post';
 let pendingSong = null;    // {url, title, artist} — song selected from the library
 let musicReady = null;     // whether the audio columns exist in the DB
@@ -118,6 +124,7 @@ let musicStartReady = null;  // audio_start column exists
 let storyLikesReady = null;  // story_likes table exists
 let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
+let mediaUrlsReady = null;   // posts.media_urls column exists (multi-photo posts)
 let pendingChatFile = null;  // file staged via the paperclip — sent only when Send is tapped
 let msgMenuId = null;        // delete-menu open for this message id
 let msgMenuMine = false;
@@ -171,7 +178,11 @@ async function afterLogin(){
   loadProbeCache();
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
-    runProbes(); // returning user: cached results already applied, re-verify quietly
+    const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady].join(',');
+    runProbes().then(function(){
+      const probeAfter = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady].join(',');
+      if(probeBefore !== probeAfter) scheduleRefresh();
+    });
   } else {
     await runProbes(); // first visit: one parallel round of probes
   }
@@ -385,6 +396,10 @@ function audioFields(){
   if(!musicReady) return '';
   return ',audio_url,audio_title,audio_artist' + (musicStartReady ? ',audio_start' : '');
 }
+function mediaField(){
+  if(!mediaUrlsReady) return '';
+  return ',media_urls';
+}
 
 async function checkSongTable(){
   try {
@@ -398,6 +413,12 @@ async function checkMusicStart(){
     const q = await supa.from('posts').select('audio_start').limit(1);
     musicStartReady = !q.error;
   } catch(e){ musicStartReady = false; }
+}
+async function checkMediaUrls(){
+  try {
+    const q = await supa.from('posts').select('media_urls').limit(1);
+    mediaUrlsReady = !q.error;
+  } catch(e){ mediaUrlsReady = false; }
 }
 async function checkStoryLikes(){
   try {
@@ -421,7 +442,7 @@ async function checkMediaMsgV2(){
 /* ---- one parallel probe round instead of 7 sequential ones ---- */
 async function runProbes(){
   await Promise.all([
-    checkMusicColumns(), checkSongTable(), checkMusicStart(),
+    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMediaUrls(),
     checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2()
   ]);
   saveProbeCache();
@@ -437,6 +458,7 @@ function loadProbeCache(){
     storyLikesReady = probeCache.storyLikesReady;
     mediaMsgReady = probeCache.mediaMsgReady;
     mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
+    mediaUrlsReady = probeCache.mediaUrlsReady;
   }
 }
 function saveProbeCache(){
@@ -444,7 +466,8 @@ function saveProbeCache(){
     localStorage.setItem('pulse-probes-v1', JSON.stringify({
       musicReady: musicReady, songsReady: songsReady,
       musicStartReady: musicStartReady, storyLikesReady: storyLikesReady,
-      mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready
+      mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready,
+      mediaUrlsReady: mediaUrlsReady
     }));
   } catch(e){}
 }
@@ -457,6 +480,7 @@ function mapPost(p){
     user: (p.profiles && p.profiles.username) || 'user',
     avatar: p.profiles ? p.profiles.avatar_url : null,
     img: p.image_url,
+    media: (p.media_urls && p.media_urls.length ? p.media_urls : [p.image_url]),
     caption: p.caption || '',
     audio: p.audio_url || null,
     audioTitle: p.audio_title || '',
@@ -476,7 +500,7 @@ function mapPost(p){
 
 async function fetchFeed(limit){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
     .order('created_at', { ascending: false })
     .limit(limit || 40);
   if(q.error){ console.error(q.error); return []; }
@@ -500,7 +524,7 @@ function rankExplore(list){
 
 async function fetchExplorePool(){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
+    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(200);
   if(q.error){ console.error(q.error); return []; }
@@ -509,7 +533,7 @@ async function fetchExplorePool(){
 
 async function fetchSavedPosts(){
   const q = await supa.from('saved')
-    .select('posts(id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id))')
+    .select('posts(id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id))')
     .eq('user_id', me.id);
   if(q.error){ console.error(q.error); return []; }
   return (q.data || []).map(function(r){ return r.posts ? mapPost(r.posts) : null; }).filter(Boolean);
@@ -680,6 +704,8 @@ function renderPost(p){
   const saved = mySaved.has(p.id);
   const showAll = p.commentsExpanded;
   const commentsToShow = showAll ? p.comments : p.comments.slice(-2);
+  const mediaList = (p.media && p.media.length ? p.media : [p.img]);
+  const multi = mediaList.length > 1;
   return ''
   + '<div class="post" id="post-' + p.id + '">'
     + '<div class="post-head">'
@@ -692,8 +718,22 @@ function renderPost(p){
       + '</div>'
       + '<button class="more-btn" onclick="postMenu(\'' + p.id + '\')">' + moreIcon + '</button>'
     + '</div>'
-    + '<div class="post-media" ondblclick="likePost(\'' + p.id + '\', true)">'
-      + '<img src="' + p.img + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">'
+    + '<div class="post-media' + (multi ? ' carousel' : '') + '" ondblclick="likePost(\'' + p.id + '\', true)">'
+      + (multi
+        ? '<div class="car-track" onscroll="carScrolled(this)">'
+          + mediaList.map(function(u){
+              return '<img src="' + u + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">';
+            }).join('')
+          + '</div>'
+          + '<button class="car-btn left" style="display:none" onclick="event.stopPropagation();carGo(this,-1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
+          + '<button class="car-btn right" onclick="event.stopPropagation();carGo(this,1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 6 15 12 9 18"/></svg></button>'
+          + '<div class="car-count">1/' + mediaList.length + '</div>'
+          + '<div class="car-dots">'
+          + mediaList.map(function(_, mi){
+              return '<button class="car-dot' + (mi === 0 ? ' on' : '') + '" onclick="event.stopPropagation();carDot(this,' + mi + ')" ondblclick="event.stopPropagation()"></button>';
+            }).join('')
+          + '</div>'
+        : '<img src="' + p.img + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">')
       + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
@@ -729,6 +769,31 @@ function expandComments(id){
   if(!p) return;
   p.commentsExpanded = true;
   refresh();
+}
+
+/* ---- multi-photo carousel (up to 5 photos per post) ---- */
+function carGo(btn, dir){
+  var media = btn.closest('.post-media');
+  var track = media ? media.querySelector('.car-track') : null;
+  if(track) track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' });
+}
+function carDot(el, i){
+  var media = el.closest('.post-media');
+  var track = media ? media.querySelector('.car-track') : null;
+  if(track) track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
+}
+function carScrolled(trackEl){
+  var idx = Math.round(trackEl.scrollLeft / Math.max(1, trackEl.clientWidth));
+  var media = trackEl.closest('.post-media');
+  if(!media) return;
+  var dots = media.querySelectorAll('.car-dot');
+  for(var i=0;i<dots.length;i++) dots[i].classList.toggle('on', i === idx);
+  var c = media.querySelector('.car-count');
+  if(c && dots.length) c.textContent = (idx + 1) + '/' + dots.length;
+  var l = media.querySelector('.car-btn.left');
+  var r = media.querySelector('.car-btn.right');
+  if(l) l.style.display = idx > 0 ? 'flex' : 'none';
+  if(r) r.style.display = idx < dots.length - 1 ? 'flex' : 'none';
 }
 
 /* ---------------- Audio playback (one song at a time) ---------------- */
@@ -806,7 +871,7 @@ function renderExploreGrid(){
   }
   document.getElementById('explore-grid').innerHTML =
     (pool.length ? pool.map(function(p){
-      return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + '</div>';
+      return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + multiBadge(p) + '</div>';
     }).join('') : '<div class="empty-note" style="grid-column:1/-1;">No results' + (term ? ' for that search' : '') + '.</div>');
 }
 
@@ -1310,7 +1375,7 @@ async function renderProfile(){
     + '</div>'
     + '<div class="grid">'
     + (shown.length ? shown.map(function(p){
-        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + '</div>';
+        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + multiBadge(p) + '</div>';
       }).join('') : '<div class="empty-note" style="grid-column:1/-1;">' + (profileTab === 'posts' ? 'No posts yet.' : 'Nothing saved yet.') + '</div>')
     + '</div>';
 }
@@ -1349,7 +1414,7 @@ async function renderOtherProfile(username){
   }
   const prof = q.data;
   const results = await Promise.all([
-    supa.from('posts').select('id,user_id,image_url,caption,created_at' + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
+    supa.from('posts').select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
     countRows('posts', 'user_id', prof.id),
     countRows('follows', 'following_id', prof.id),
     countRows('follows', 'follower_id', prof.id)
@@ -1379,7 +1444,7 @@ async function renderOtherProfile(username){
     + '</div>'
     + '<div class="grid">'
     + (theirPosts.length ? theirPosts.map(function(p){
-        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + '</div>';
+        return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + multiBadge(p) + '</div>';
       }).join('') : '<div class="empty-note" style="grid-column:1/-1;">No posts yet.</div>')
     + '</div>';
   theirPosts.forEach(function(p){ postIndex[p.id] = p; });
@@ -1563,7 +1628,7 @@ function getStoryUser(u){
 
 function openStoryViewer(u){
   svUser = getStoryUser(u);
-  if(!svUser.items || svUser.items.length === 0) return;
+  if(!svUser.items || !svUser.items.length === 0) return;
   svIndex = 0;
   document.getElementById('story-viewer').classList.add('open');
   document.getElementById('sv-uname').textContent = svUser.u;
@@ -1752,7 +1817,10 @@ function closeCreateModal(){
   document.getElementById('caption-input').value = '';
   document.getElementById('file-input').value = '';
   document.getElementById('share-btn').disabled = true;
-  pendingImage = null;
+  pendingImages = [];
+  curImgIdx = 0;
+  document.getElementById('multi-thumbs').style.display = 'none';
+  document.getElementById('multi-thumbs').innerHTML = '';
   pendingSong = null;
   document.getElementById('editor-tools').style.display = 'none';
   document.getElementById('crop-tools').style.display = 'none';
@@ -1765,22 +1833,110 @@ function closeCreateModal(){
   renderMusicRow();
 }
 document.getElementById('file-input').addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  pendingImage = { file: file };
-  const reader = new FileReader();
-  reader.onload = function(ev){
-    pendingImage.dataUrl = ev.target.result;
-    const img = document.getElementById('preview-img');
-    img.src = pendingImage.dataUrl;
-    img.style.display = 'block';
+  var files = Array.prototype.slice.call(e.target.files || []);
+  e.target.value = '';
+  if(!files.length) return;
+  if(files.length + pendingImages.length > 5) toast('Up to 5 photos per post — extra photos were not added');
+  var added = [];
+  for(var i=0;i<files.length && pendingImages.length + added.length < 5;i++){
+    if(files[i].type && files[i].type.indexOf('image/') !== 0) continue;
+    added.push({ file: files[i], dataUrl: null, edit: null });
+  }
+  if(!added.length) return;
+  Promise.all(added.map(function(item){
+    return new Promise(function(res){
+      var r = new FileReader();
+      r.onload = function(ev){ item.dataUrl = ev.target.result; res(); };
+      r.onerror = function(){ res(); };
+      r.readAsDataURL(item.file);
+    });
+  })).then(function(){
+    if(pendingImages.length) snapEdit();
+    var startIdx = pendingImages.length;
+    pendingImages = pendingImages.concat(added);
+    selectPick(startIdx, true);
     document.getElementById('preview-wrap').style.display = 'block';
     document.getElementById('drop-zone').style.display = 'none';
     document.getElementById('share-btn').disabled = false;
-    edInit(img);
-  };
-  reader.readAsDataURL(file);
+    renderThumbs();
+  });
 });
+
+/* ---- multi-photo picker: switch / remove / thumbnails ---- */
+function snapEdit(){
+  if(!pendingImages[curImgIdx]) return;
+  pendingImages[curImgIdx].edit = {
+    ed: Object.assign({}, ed),
+    edSource: edSource,
+    edOriginal: edOriginal,
+    edCropOff: Object.assign({}, edCropOff)
+  };
+}
+function restoreEdit(item){
+  if(item.edit){
+    ed = Object.assign({}, item.edit.ed);
+    edSource = item.edit.edSource;
+    edOriginal = item.edit.edOriginal;
+    edCropOff = Object.assign({}, item.edit.edCropOff);
+    edSyncSliders();
+    edApplyPreview();
+  } else {
+    edInit(document.getElementById('preview-img'));
+  }
+}
+function selectPick(i, force){
+  if(i < 0 || i >= pendingImages.length) return;
+  if(!force && i === curImgIdx) return;
+  if(cropMode) cropCancel();
+  snapEdit();
+  curImgIdx = i;
+  var item = pendingImages[i];
+  var img = document.getElementById('preview-img');
+  img.style.display = 'block';
+  img.src = item.dataUrl;
+  restoreEdit(item);
+  renderThumbs();
+}
+function removePick(i){
+  if(i < 0 || i >= pendingImages.length) return;
+  pendingImages.splice(i, 1);
+  if(cropMode) cropCancel();
+  if(!pendingImages.length){
+    curImgIdx = 0;
+    document.getElementById('preview-wrap').style.display = 'none';
+    document.getElementById('multi-thumbs').style.display = 'none';
+    document.getElementById('drop-zone').style.display = 'flex';
+    document.getElementById('share-btn').disabled = true;
+    document.getElementById('editor-tools').style.display = 'none';
+    edSource = null; edOriginal = null; edReset();
+    return;
+  }
+  if(curImgIdx >= pendingImages.length) curImgIdx = pendingImages.length - 1;
+  else if(i < curImgIdx) curImgIdx -= 1;
+  else if(i > curImgIdx){ renderThumbs(); return; }
+  var item = pendingImages[curImgIdx];
+  var img = document.getElementById('preview-img');
+  img.src = item.dataUrl;
+  restoreEdit(item);
+  renderThumbs();
+}
+function renderThumbs(){
+  var t = document.getElementById('multi-thumbs');
+  if(!t) return;
+  if(!pendingImages.length){ t.style.display = 'none'; t.innerHTML = ''; return; }
+  t.style.display = 'flex';
+  var html = pendingImages.map(function(it, i){
+    return '<div class="mthumb' + (i === curImgIdx ? ' active' : '') + '" onclick="selectPick(' + i + ')">'
+      + '<img src="' + it.dataUrl + '">'
+      + (i === 0 ? '<span class="mthumb-cov">Cover</span>' : '')
+      + '<button class="mthumb-x" title="Remove" onclick="event.stopPropagation();removePick(' + i + ')">&times;</button>'
+    + '</div>';
+  }).join('');
+  if(pendingImages.length < 5){
+    html += '<button class="mthumb add" title="Add another photo" onclick="document.getElementById(\'file-input\').click()">+</button>';
+  }
+  t.innerHTML = html;
+}
 
 /* ---------------- Photo editor (brightness / color / zoom) ---------------- */
 var ed = { bright: 100, contrast: 100, sat: 100, zoom: 100, x: 0, y: 0, edited: false };
@@ -2014,7 +2170,7 @@ function cropResize(zone, drag, px, py){
   if(x < 0) x = 0;
   if(y < 0) y = 0;
   if(x + w > W) x = Math.max(0, W - w);
-  if(y + h > H) y = Math.max(0, H - h);
+  if(y + h > H) y = Math.max(0, H - y);
   if(x + w > W) w = W - x;
   if(y + h > H) h = H - y;
   cropBox = { x: x, y: y, w: Math.max(12, w), h: Math.max(12, h) };
@@ -2096,9 +2252,25 @@ function edFilterPixels(imgData){
     d[i+2] = bl < 0 ? 0 : bl > 255 ? 255 : bl;
   }
 }
-async function getEditedFile(){
-  if(!pendingImage || !pendingImage.file) return null;
-  if(!ed.edited || !edSource) return pendingImage.file;
+async function getEditedFileFor(i){
+  var item = pendingImages[i];
+  if(!item || !item.file) return null;
+  if(!item.edit || !item.edit.ed.edited || !item.edit.edSource) return item.file;
+  var gEd = Object.assign({}, ed), gSrc = edSource, gOrig = edOriginal, gOff = Object.assign({}, edCropOff);
+  ed = Object.assign({}, item.edit.ed);
+  edSource = item.edit.edSource;
+  edOriginal = item.edit.edOriginal;
+  edCropOff = Object.assign({}, item.edit.edCropOff);
+  var out;
+  try { out = await buildEditedFile(item.file); }
+  finally {
+    ed = gEd; edSource = gSrc; edOriginal = gOrig; edCropOff = gOff;
+  }
+  return out;
+}
+async function buildEditedFile(file){
+  if(!file) return null;
+  if(!ed.edited || !edSource) return file;
   try {
     var MAX = 1440;
     var sw = edSource.w, sh = edSource.h;
@@ -2115,11 +2287,11 @@ async function getEditedFile(){
     edFilterPixels(data);
     ctx.putImageData(data, 0, 0);
     var blob = await new Promise(function(res){ cv.toBlob(res, 'image/jpeg', 0.92); });
-    if(!blob) return pendingImage.file;
+    if(!blob) return file;
     return new File([blob], 'photo-edited.jpg', { type: 'image/jpeg' });
   } catch(err){
     console.error(err);
-    return pendingImage.file;
+    return file;
   }
 }
 
@@ -2302,19 +2474,30 @@ document.getElementById('song-file-input').addEventListener('change', async func
 });
 
 async function publishCreate(){
-  if(!pendingImage || !pendingImage.file) return;
+  if(!pendingImages.length) return;
   const btn = document.getElementById('share-btn');
   btn.disabled = true; btn.textContent = 'Uploading...';
   stopPreview();
+  if(cropMode) cropCancel();
+  snapEdit();
   try {
     var audioUrl = null;
     if(pendingSong && musicReady){
       audioUrl = pendingSong.url;
     }
-    const url = await uploadImage(await getEditedFile());
+    if(pendingImages.length > 1 && !mediaUrlsReady){
+      toast('Multi-photo posts need a one-time SQL update in Supabase — see multi-photo-posts.sql');
+      btn.disabled = false; btn.textContent = createTab === 'post' ? 'Share' : 'Add to story';
+      return;
+    }
+    var urls = [];
+    for(var pi=0;pi<pendingImages.length;pi++){
+      urls.push(await uploadImage(await getEditedFileFor(pi)));
+    }
     if(createTab === 'post'){
       const caption = document.getElementById('caption-input').value.trim();
-      var payload = { user_id: me.id, image_url: url, caption: caption || null };
+      var payload = { user_id: me.id, image_url: urls[0], caption: caption || null };
+      if(urls.length > 1) payload.media_urls = urls;
       if(audioUrl){
         payload.audio_url = audioUrl;
         payload.audio_title = pendingSong.title || null;
@@ -2326,9 +2509,10 @@ async function publishCreate(){
       closeCreateModal();
       await refreshData();
       showView('feed');
-      toast('Posted!');
+      toast(urls.length > 1 ? 'Posted ' + urls.length + ' photos!' : 'Posted!');
     } else {
-      var payload2 = { user_id: me.id, image_url: url };
+      if(urls.length > 1) toast('Stories take one photo — the first one was used');
+      var payload2 = { user_id: me.id, image_url: urls[0] };
       if(audioUrl){
         payload2.audio_url = audioUrl;
         payload2.audio_title = pendingSong.title || null;
