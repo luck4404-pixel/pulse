@@ -348,6 +348,23 @@
   .reel-rail .liked svg{fill:var(--like);stroke:var(--like);}
   .reel-rail .saved svg{fill:#fff;}
 
+  /* ---------- Shorts-style post viewer ---------- */
+  #shorts-viewer{position:fixed;inset:0;background:#000;z-index:110;display:none;}
+  #shorts-viewer.open{display:block;}
+  #shorts-close{position:absolute;top:14px;right:16px;background:rgba(255,255,255,.14);border:none;color:#fff;font-size:22px;line-height:1;width:38px;height:38px;border-radius:50%;z-index:6;}
+  #shorts-scroller{position:absolute;inset:0;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;}
+  #shorts-scroller::-webkit-scrollbar{display:none;}
+  .short-slide{height:100vh;scroll-snap-align:start;scroll-snap-stop:always;position:relative;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden;}
+  .short-img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;}
+  .short-overlay-bottom{position:absolute;left:0;right:76px;bottom:0;padding:18px 14px;color:#fff;background:linear-gradient(to top,rgba(0,0,0,.6),transparent);}
+  .short-overlay-bottom .u{font-weight:600;font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+  .short-overlay-bottom .u img{width:26px;height:26px;border-radius:50%;object-fit:cover;}
+  .short-overlay-bottom .cap{font-size:13px;opacity:.92;word-wrap:break-word;}
+  .short-rail{position:absolute;right:10px;bottom:90px;display:flex;flex-direction:column;align-items:center;gap:18px;color:#fff;}
+  .short-rail button{background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11.5px;font-weight:600;}
+  .short-rail svg{width:27px;height:27px;}
+  .short-rail .liked svg{fill:var(--like);stroke:var(--like);}
+
   /* ---------- Messages ---------- */
   .msg-row{display:flex;align-items:center;gap:12px;padding:10px 4px;cursor:pointer;border-radius:10px;}
   .msg-row:hover{background:var(--surface);}
@@ -772,6 +789,12 @@
   </div>
 </div>
 
+<!-- Shorts-style post viewer -->
+<div id="shorts-viewer">
+  <button id="shorts-close" onclick="closeShorts()" title="Close">&times;</button>
+  <div id="shorts-scroller"></div>
+</div>
+
 <!-- Full-screen photo viewer -->
 <div id="img-viewer" onclick="closeImageViewer()">
   <img id="img-viewer-img" src="" alt="">
@@ -779,6 +802,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
