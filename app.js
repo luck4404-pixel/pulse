@@ -22,6 +22,7 @@ const bookmarkOutline = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 const bookmarkFilled = '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4Z"/></svg>';
 const moreIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>';
 const speakerIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+const downloadIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 const photoPlaceholder = 'data:image/svg+xml;utf8,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><rect width='600' height='600' fill='#262626'/><circle cx='300' cy='272' r='70' fill='#4b4b4b'/><rect x='210' y='360' width='180' height='16' rx='8' fill='#4b4b4b'/><text x='300' y='290' font-size='56' font-family='Arial' fill='#666' text-anchor='middle'>📷</text></svg>");
 
 /* ---------------- Helpers ---------------- */
@@ -636,7 +637,6 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-media" ondblclick="likePost(\'' + p.id + '\', true)">'
       + '<img src="' + p.img + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">'
-      + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
     + '<div class="post-actions">'
@@ -679,7 +679,7 @@ let playingAudioPostId = null;
 function stopAudio(){
   if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
   playingAudioPostId = null;
-  var chips = document.querySelectorAll('.music-chip, .post-speaker');
+  var chips = document.querySelectorAll('.music-chip, .post-speaker, #shorts-scroller .reel-music-chip');
   for(var i=0;i<chips.length;i++) chips[i].classList.remove('playing');
 }
 function togglePostAudio(id){
@@ -698,6 +698,8 @@ function togglePostAudio(id){
     for(var ci=0;ci<chips.length;ci++) chips[ci].classList.add('playing');
     var spks = document.querySelectorAll('#spk-' + id);
     for(var si=0;si<spks.length;si++) spks[si].classList.add('playing');
+    var sChips = document.querySelectorAll('#shorts-scroller .short-slide[data-post="' + id + '"] .reel-music-chip');
+    for(var sci=0;sci<sChips.length;sci++) sChips[sci].classList.add('playing');
   }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
 }
 
@@ -757,9 +759,10 @@ function closePostModal(){
 
 /* ---------------- Full-screen photo viewer ---------------- */
 var imgTapTimer = null;
+var shortsObserver = null;
 function imgTap(id){
   if(imgTapTimer){ clearTimeout(imgTapTimer); imgTapTimer = null; return; }
-  imgTapTimer = setTimeout(function(){ imgTapTimer = null; openImageViewer(id); }, 260);
+  imgTapTimer = setTimeout(function(){ imgTapTimer = null; openShorts(id); }, 260);
 }
 function openImageViewer(id){
   var p = postIndex[id];
@@ -773,6 +776,99 @@ function closeImageViewer(){
   document.getElementById('img-viewer').classList.remove('open');
   var img = document.getElementById('img-viewer-img');
   if(img) img.src = '';
+}
+
+/* ---------------- Shorts-style post viewer ---------------- */
+function openShorts(startId){
+  var pool = posts;
+  if(!pool.some(function(p){ return p.id === startId; })) pool = explorePool;
+  if(!pool.length) return;
+  var startIdx = 0;
+  for(var i=0;i<pool.length;i++){ if(pool[i].id === startId){ startIdx = i; break; } }
+  var sc = document.getElementById('shorts-scroller');
+  sc.innerHTML = pool.map(renderShortSlide).join('');
+  document.getElementById('shorts-viewer').classList.add('open');
+  stopAudio();
+  var slides = sc.querySelectorAll('.short-slide');
+  if(slides[startIdx]) slides[startIdx].scrollIntoView();
+  if(shortsObserver){ try{ shortsObserver.disconnect(); }catch(e){} shortsObserver = null; }
+  try {
+    shortsObserver = new IntersectionObserver(function(entries){
+      for(var i=0;i<entries.length;i++){
+        var en = entries[i];
+        if(en.isIntersecting && en.intersectionRatio >= 0.6){
+          shortsActive(en.target.getAttribute('data-post'));
+        }
+      }
+    }, { root: sc, threshold: [0.6] });
+    for(var j=0;j<slides.length;j++) shortsObserver.observe(slides[j]);
+  } catch(e){ shortsObserver = null; }
+  shortsActive(pool[startIdx].id);
+}
+
+function renderShortSlide(p){
+  const liked = p.likes.indexOf(me.id) !== -1;
+  return '<div class="short-slide" data-post="' + p.id + '">'
+    + '<img class="short-img" src="' + p.img + '" ondblclick="shortLike(\'' + p.id + '\', true)">'
+    + '<div class="short-overlay-bottom">'
+      + '<div class="u" style="cursor:pointer" onclick="closeShorts();viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
+      + (p.caption ? '<div class="cap">' + esc(p.caption) + '</div>' : '')
+      + (p.audio ? '<div class="reel-music-chip"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
+    + '</div>'
+    + '<div class="short-rail">'
+      + '<button id="sl-' + p.id + '" class="' + (liked ? 'liked' : '') + '" onclick="shortLike(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '<span id="slc-' + p.id + '">' + p.likes.length + '</span></button>'
+      + '<button onclick="shortComment(\'' + p.id + '\')">' + commentIcon + '<span>' + p.comments.length + '</span></button>'
+      + '<button onclick="shortDownload(\'' + p.id + '\')">' + downloadIcon + '<span>Save</span></button>'
+      + '<button onclick="sharePost()">' + shareIcon + '<span>Share</span></button>'
+    + '</div>'
+  + '</div>';
+}
+
+function shortsActive(id){
+  var p = postIndex[id];
+  if(!p) return;
+  if(p.audio){
+    if(playingAudioPostId !== id) togglePostAudio(id);
+  } else if(playingAudioPostId){
+    stopAudio();
+  }
+}
+
+function shortLike(id, fromDbl){
+  likePost(id, fromDbl).then(function(){
+    var p = postIndex[id];
+    var btn = document.getElementById('sl-' + id);
+    if(!p || !btn) return;
+    var liked = p.likes.indexOf(me.id) !== -1;
+    btn.classList.toggle('liked', liked);
+    btn.innerHTML = (liked ? heartFilled : heartOutline) + '<span id="slc-' + id + '">' + p.likes.length + '</span>';
+  });
+}
+
+function shortComment(id){
+  closeShorts();
+  openPostModal(id);
+}
+
+function shortDownload(id){
+  var p = postIndex[id];
+  if(!p || !p.img) return;
+  var a = document.createElement('a');
+  a.href = p.img;
+  a.download = 'pulse-' + id + '.jpg';
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('Saving photo\u2026');
+}
+
+function closeShorts(){
+  stopAudio();
+  if(shortsObserver){ try{ shortsObserver.disconnect(); }catch(e){} shortsObserver = null; }
+  var sc = document.getElementById('shorts-scroller');
+  if(sc) sc.innerHTML = '';
+  document.getElementById('shorts-viewer').classList.remove('open');
 }
 
 /* ---------------- Reels ---------------- */
@@ -2250,6 +2346,7 @@ function toggleTheme(){
 document.addEventListener('keydown', function(e){
   if(e.key !== 'Escape') return;
   if(document.getElementById('img-viewer').classList.contains('open')) closeImageViewer();
+  else if(document.getElementById('shorts-viewer').classList.contains('open')) closeShorts();
   else if(document.getElementById('post-modal').classList.contains('open')) closePostModal();
   else if(document.getElementById('create-modal').classList.contains('open')) closeCreateModal();
   else if(document.getElementById('music-modal').classList.contains('open')) closeMusicPicker();
