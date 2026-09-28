@@ -637,6 +637,7 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-media" ondblclick="likePost(\'' + p.id + '\', true)">'
       + '<img src="' + p.img + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">'
+      + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
     + '<div class="post-actions">'
@@ -679,7 +680,7 @@ let playingAudioPostId = null;
 function stopAudio(){
   if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
   playingAudioPostId = null;
-  var chips = document.querySelectorAll('.music-chip, .post-speaker, #shorts-scroller .reel-music-chip');
+  var chips = document.querySelectorAll('.music-chip, .post-speaker, #shorts-scroller .reel-music-chip, #shorts-scroller .rail-audio');
   for(var i=0;i<chips.length;i++) chips[i].classList.remove('playing');
 }
 function togglePostAudio(id){
@@ -700,6 +701,10 @@ function togglePostAudio(id){
     for(var si=0;si<spks.length;si++) spks[si].classList.add('playing');
     var sChips = document.querySelectorAll('#shorts-scroller .short-slide[data-post="' + id + '"] .reel-music-chip');
     for(var sci=0;sci<sChips.length;sci++) sChips[sci].classList.add('playing');
+    var rBtns = document.querySelectorAll('#shorts-scroller .rail-audio');
+    for(var rbi=0;rbi<rBtns.length;rbi++) rBtns[rbi].classList.remove('playing');
+    var rBtn = document.getElementById('sr-' + id);
+    if(rBtn) rBtn.classList.add('playing');
   }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
 }
 
@@ -760,6 +765,7 @@ function closePostModal(){
 /* ---------------- Full-screen photo viewer ---------------- */
 var imgTapTimer = null;
 var shortsObserver = null;
+var activeShortId = null;
 function imgTap(id){
   if(imgTapTimer){ clearTimeout(imgTapTimer); imgTapTimer = null; return; }
   imgTapTimer = setTimeout(function(){ imgTapTimer = null; openShorts(id); }, 260);
@@ -809,6 +815,7 @@ function openShorts(startId){
 function renderShortSlide(p){
   const liked = p.likes.indexOf(me.id) !== -1;
   return '<div class="short-slide" data-post="' + p.id + '">'
+    + '<img class="short-bg" src="' + p.img + '" alt="">'
     + '<img class="short-img" src="' + p.img + '" ondblclick="shortLike(\'' + p.id + '\', true)">'
     + '<div class="short-overlay-bottom">'
       + '<div class="u" style="cursor:pointer" onclick="closeShorts();viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
@@ -818,6 +825,7 @@ function renderShortSlide(p){
     + '<div class="short-rail">'
       + '<button id="sl-' + p.id + '" class="' + (liked ? 'liked' : '') + '" onclick="shortLike(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '<span id="slc-' + p.id + '">' + p.likes.length + '</span></button>'
       + '<button onclick="shortComment(\'' + p.id + '\')">' + commentIcon + '<span>' + p.comments.length + '</span></button>'
+      + (p.audio ? '<button class="rail-audio" id="sr-' + p.id + '" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span><span>Song</span></button>' : '')
       + '<button onclick="shortDownload(\'' + p.id + '\')">' + downloadIcon + '<span>Save</span></button>'
       + '<button onclick="sharePost()">' + shareIcon + '<span>Share</span></button>'
     + '</div>'
@@ -825,6 +833,7 @@ function renderShortSlide(p){
 }
 
 function shortsActive(id){
+  activeShortId = id;
   var p = postIndex[id];
   if(!p) return;
   if(p.audio){
@@ -832,6 +841,23 @@ function shortsActive(id){
   } else if(playingAudioPostId){
     stopAudio();
   }
+}
+
+function shortAudioToggle(id){
+  if(playingAudioPostId === id){ stopAudio(); return; }
+  togglePostAudio(id);
+}
+
+function shortsGo(dir){
+  var sc = document.getElementById('shorts-scroller');
+  var slides = sc ? sc.querySelectorAll('.short-slide') : [];
+  if(!slides.length) return;
+  var idx = 0;
+  for(var i=0;i<slides.length;i++){ if(slides[i].getAttribute('data-post') === activeShortId){ idx = i; break; } }
+  var n = idx + dir;
+  if(n < 0) n = 0;
+  if(n > slides.length - 1) n = slides.length - 1;
+  if(slides[n]) slides[n].scrollIntoView({ behavior: 'smooth' });
 }
 
 function shortLike(id, fromDbl){
