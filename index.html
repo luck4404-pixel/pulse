@@ -365,14 +365,15 @@
   .short-rail button{background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11.5px;font-weight:600;}
   .short-rail svg{width:27px;height:27px;}
   .short-rail .liked svg{fill:var(--like);stroke:var(--like);}
-  .short-rail .rail-audio .eq{display:none;height:16px;align-items:flex-end;gap:2px;flex-shrink:0;}
-  .short-rail .rail-audio .eq i{width:2.5px;height:4px;background:#fff;border-radius:1px;}
-  .short-rail .rail-audio.playing svg{display:none;}
-  .short-rail .rail-audio.playing .eq{display:inline-flex;}
-  .short-rail .rail-audio.playing .eq i{animation:eqbar .7s ease-in-out infinite alternate;}
-  .short-rail .rail-audio.playing .eq i:nth-child(2){animation-delay:.15s;}
-  .short-rail .rail-audio.playing .eq i:nth-child(3){animation-delay:.3s;}
-  #shorts-nav{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:12px;z-index:5;}
+  .short-song{position:absolute;top:14px;right:64px;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.14);border:none;color:#fff;display:flex;align-items:center;justify-content:center;z-index:6;}
+  .short-song .eq{display:none;height:16px;align-items:flex-end;gap:2px;flex-shrink:0;}
+  .short-song .eq i{width:2.5px;height:4px;background:#fff;border-radius:1px;}
+  .short-song.playing svg{display:none;}
+  .short-song.playing .eq{display:inline-flex;}
+  .short-song.playing .eq i{animation:eqbar .7s ease-in-out infinite alternate;}
+  .short-song.playing .eq i:nth-child(2){animation-delay:.15s;}
+  .short-song.playing .eq i:nth-child(3){animation-delay:.3s;}
+  #shorts-nav{position:absolute;right:58px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:12px;z-index:5;}
   #shorts-nav button{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.14);border:none;color:#fff;display:flex;align-items:center;justify-content:center;}
   #shorts-nav button:active{transform:scale(.92);}
 
@@ -817,6 +818,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
