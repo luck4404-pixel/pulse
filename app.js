@@ -680,7 +680,7 @@ let playingAudioPostId = null;
 function stopAudio(){
   if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
   playingAudioPostId = null;
-  var chips = document.querySelectorAll('.music-chip, .post-speaker, #shorts-scroller .reel-music-chip, #shorts-scroller .rail-audio');
+  var chips = document.querySelectorAll('.music-chip, .post-speaker, #shorts-scroller .reel-music-chip, #shorts-scroller .short-song');
   for(var i=0;i<chips.length;i++) chips[i].classList.remove('playing');
 }
 function togglePostAudio(id){
@@ -701,7 +701,7 @@ function togglePostAudio(id){
     for(var si=0;si<spks.length;si++) spks[si].classList.add('playing');
     var sChips = document.querySelectorAll('#shorts-scroller .short-slide[data-post="' + id + '"] .reel-music-chip');
     for(var sci=0;sci<sChips.length;sci++) sChips[sci].classList.add('playing');
-    var rBtns = document.querySelectorAll('#shorts-scroller .rail-audio');
+    var rBtns = document.querySelectorAll('#shorts-scroller .short-song');
     for(var rbi=0;rbi<rBtns.length;rbi++) rBtns[rbi].classList.remove('playing');
     var rBtn = document.getElementById('sr-' + id);
     if(rBtn) rBtn.classList.add('playing');
@@ -819,6 +819,7 @@ function renderShortSlide(p){
   const liked = p.likes.indexOf(me.id) !== -1;
   return '<div class="short-slide" data-post="' + p.id + '">'
     + '<img class="short-bg" src="' + p.img + '" alt="">'
+    + (p.audio ? '<button class="short-song" id="sr-' + p.id + '" title="Play or pause song" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
     + '<img class="short-img" src="' + p.img + '" ondblclick="shortLike(\'' + p.id + '\', true)">'
     + '<div class="short-overlay-bottom">'
       + '<div class="u" style="cursor:pointer" onclick="closeShorts();viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
@@ -828,7 +829,6 @@ function renderShortSlide(p){
     + '<div class="short-rail">'
       + '<button id="sl-' + p.id + '" class="' + (liked ? 'liked' : '') + '" onclick="shortLike(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '<span id="slc-' + p.id + '">' + p.likes.length + '</span></button>'
       + '<button onclick="shortComment(\'' + p.id + '\')">' + commentIcon + '<span>' + p.comments.length + '</span></button>'
-      + (p.audio ? '<button class="rail-audio" id="sr-' + p.id + '" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span><span>Song</span></button>' : '')
       + '<button onclick="shortDownload(\'' + p.id + '\')">' + downloadIcon + '<span>Save</span></button>'
       + '<button onclick="sharePost()">' + shareIcon + '<span>Share</span></button>'
     + '</div>'
