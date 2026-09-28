@@ -1628,7 +1628,7 @@ function getStoryUser(u){
 
 function openStoryViewer(u){
   svUser = getStoryUser(u);
-  if(!svUser.items || !svUser.items.length === 0) return;
+  if(!svUser.items || svUser.items.length === 0) return;
   svIndex = 0;
   document.getElementById('story-viewer').classList.add('open');
   document.getElementById('sv-uname').textContent = svUser.u;
@@ -2170,7 +2170,7 @@ function cropResize(zone, drag, px, py){
   if(x < 0) x = 0;
   if(y < 0) y = 0;
   if(x + w > W) x = Math.max(0, W - w);
-  if(y + h > H) y = Math.max(0, H - y);
+  if(y + h > H) y = Math.max(0, H - h);
   if(x + w > W) w = W - x;
   if(y + h > H) h = H - y;
   cropBox = { x: x, y: y, w: Math.max(12, w), h: Math.max(12, h) };
