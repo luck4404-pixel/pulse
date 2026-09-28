@@ -286,6 +286,12 @@
   }
   .share-btn:disabled{opacity:.4;cursor:default;}
   .ghost-btn{background:none;border:none;color:var(--text-soft);font-size:13px;margin-top:14px;display:block;margin-left:auto;margin-right:auto;}
+  .google-btn{width:100%;margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-weight:600;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer;}
+  .google-btn:active{transform:scale(.98);}
+  .google-btn svg{width:18px;height:18px;flex-shrink:0;}
+  .or-divider{display:flex;align-items:center;gap:8px;margin:12px 0 4px;}
+  .or-divider .l{flex:1;height:1px;background:var(--border);}
+  .or-divider span{font-size:11.5px;color:var(--text-faint);}
 
   /* post-viewer modal (reuses .post look, wider) */
   #post-modal .modal{max-width:480px;background:transparent;box-shadow:none;position:relative;}
@@ -789,6 +795,8 @@
       <input id="ea-password" type="password" placeholder="at least 6 characters">
       <button class="share-btn" id="ea-submit" onclick="submitEmailAuth()">Sign up</button>
       <button class="ghost-btn" onclick="closeEmailAuth()">Back</button>
+      <div class="or-divider"><div class="l"></div><span>or</span><div class="l"></div></div>
+      <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Continue with Google</button>
     </div>
   </div>
 </div>
@@ -818,6 +826,8 @@
         <button class="toggle-theme" style="font-size:12px;padding:7px 12px;" onclick="showEmailAuth('signup')">✉ Sign up with email</button>
         <button class="toggle-theme" style="font-size:12px;padding:7px 12px;" onclick="showEmailAuth('login')">🔒 Log in with email</button>
       </div>
+      <div class="or-divider"><div class="l"></div><span>or</span><div class="l"></div></div>
+      <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Continue with Google</button>
     </div>
   </div>
 </div>
@@ -839,6 +849,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

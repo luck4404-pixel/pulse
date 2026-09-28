@@ -731,7 +731,7 @@ function renderStories(){
       + '<div class="story-ring-inner"><img src="' + avatarOf(s) + '"></div>'
       + '</div>'
       + '<span>' + esc(u) + '</span>'
-    + '</button>';
+      + '</button>';
   }).join('');
   html += '</div>';
   return html;
