@@ -200,6 +200,8 @@ async function afterLogin(){
   await refreshData();
   setupRealtime();
   setupPresence();
+  var nb = document.getElementById('notif-enable-btn');
+  if(nb && !localStorage.getItem('pulse-push-on')) nb.style.display = 'flex';
 }
 
 function updateMeUI(){
@@ -2818,6 +2820,38 @@ function updatePresenceDots(){
   document.querySelectorAll('.presence-dot[data-uid]').forEach(function(el){
     el.classList.toggle('on', presenceMap.has(el.getAttribute('data-uid')));
   });
+}
+
+/* ---------------- Push notifications ---------------- */
+const VAPID_PUBLIC_KEY = 'BDx1LdMq6yeq4vvmybIoJkS2FEDI8bx8iUT0V-vWqXLPkRR2fiY8DKMbX6816i823yIIr_P1fvEOgx6gPtu-P_Q';
+function urlB64ToUint8Array(b64){
+  var padding = '='.repeat((4 - b64.length % 4) % 4);
+  var base64 = (b64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var raw = window.atob(base64);
+  var arr = new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function enableNotifications(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ toast('This browser does not support notifications'); return; }
+  try {
+    var reg = await navigator.serviceWorker.register('sw.js');
+    var perm = await Notification.requestPermission();
+    if(perm !== 'granted'){ toast('Notifications were blocked \u2014 allow them in your browser settings, then try again'); return; }
+    var sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY) });
+    var r = await supa.from('push_subscriptions').upsert(
+      { user_id: me.id, endpoint: sub.endpoint, sub: sub.toJSON() },
+      { onConflict: 'endpoint' }
+    );
+    if(r.error){ toast('Notifications need a one-time SQL update \u2014 see push-notifications.sql'); return; }
+    try { localStorage.setItem('pulse-push-on', '1'); } catch(e2){}
+    toast('Notifications on! \ud83d\udd14');
+    var b = document.getElementById('notif-enable-btn');
+    if(b) b.style.display = 'none';
+  } catch(e){
+    console.error(e);
+    toast('Could not turn on notifications');
+  }
 }
 
 /* ---------------- Installable app (PWA) ---------------- */
