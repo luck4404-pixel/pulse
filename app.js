@@ -178,6 +178,13 @@ async function boot(){
 async function afterLogin(){
   updateMeUI();
   loadProbeCache();
+  var fc = loadFeedCache(); // returning visit: paint the last feed instantly
+  if(fc){
+    posts = fc.posts;
+    storiesByUser = fc.stories || {};
+    feedLoaded = true;
+    indexPosts();
+  }
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
     const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady].join(',');
@@ -568,6 +575,20 @@ function saveProbeCache(){
   } catch(e){}
 }
 
+/* the last feed is cached on the device so a returning visit paints instantly,
+   then fresh data quietly replaces it */
+function loadFeedCache(){
+  var c = null;
+  try { c = JSON.parse(localStorage.getItem('pulse-feed-cache-v1') || 'null'); } catch(e){ c = null; }
+  if(c && c.posts && c.posts.length && (Date.now() - c.t) < 15*60*1000) return c;
+  return null;
+}
+function saveFeedCache(){
+  try {
+    localStorage.setItem('pulse-feed-cache-v1', JSON.stringify({ t: Date.now(), posts: posts.slice(0, 12), stories: storiesByUser }));
+  } catch(e){}
+}
+
 /* ---------------- Data fetchers ---------------- */
 function mapPost(p){
   return {
@@ -756,6 +777,7 @@ async function refreshData(){
     updateBadges();
     renderView();
     renderSuggestions();
+    saveFeedCache();
   } catch(e){
     console.error(e);
   } finally {
