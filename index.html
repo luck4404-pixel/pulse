@@ -557,6 +557,25 @@
   .post-speaker.playing .eq i:nth-child(2){animation-delay:.15s;}
   .post-speaker.playing .eq i:nth-child(3){animation-delay:.3s;}
 
+  /* ---------- Instagram-style entry screen ---------- */
+  #onboarding-overlay{background:var(--bg);align-items:flex-start;overflow-y:auto;padding:56px 0 28px;}
+  .auth-page{width:100%;max-width:360px;margin:0 auto;padding:0 10px;text-align:center;}
+  .auth-wordmark{font-family:'Poppins',sans-serif;font-weight:700;font-size:36px;letter-spacing:.3px;background:var(--ring);-webkit-background-clip:text;background-clip:text;color:transparent;margin:12px 0 12px;}
+  .auth-tagline{font-size:16px;color:var(--text);font-weight:600;line-height:1.45;margin:0 auto 20px;max-width:300px;}
+  .auth-avatar{width:78px;height:78px;border-radius:50%;background:var(--ring);padding:3px;margin:0 auto;}
+  .auth-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:var(--surface);}
+  .auth-avatar-btn{background:none;border:none;color:#0095F6;font-weight:600;font-size:12.5px;margin:9px 0 18px;display:inline-block;padding:0;}
+  #onboarding-overlay .auth-field{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:12px 14px;font-size:15px;color:var(--text);outline:none;margin-bottom:9px;text-align:left;box-sizing:border-box;}
+  #onboarding-overlay .auth-field:focus{border-color:#a8a8a8;}
+  .auth-continue{width:100%;padding:11px;border:none;border-radius:10px;background:#0095F6;color:#fff;font-weight:600;font-size:14.5px;margin-top:6px;}
+  .auth-continue:disabled{opacity:.4;cursor:default;}
+  .auth-skip{background:none;border:none;color:var(--text-soft);font-size:13.5px;margin-top:12px;display:inline-block;padding:0;}
+  #onboarding-overlay .or-divider{margin:16px 0 10px;}
+  #onboarding-overlay .google-btn{background:var(--surface);color:var(--text);}
+  .auth-foot{font-size:13px;color:var(--text-soft);margin-top:16px;}
+  .auth-foot a{color:var(--text);font-weight:600;cursor:pointer;}
+  .auth-brand-foot{margin-top:36px;font-size:11.5px;color:var(--text-faint);}
+
   @media(min-width:700px){ .search{display:flex;} }
   @media(min-width:900px){
     .side-col{display:block;}
@@ -809,35 +828,25 @@
   </div>
 </div>
 
-<!-- New user onboarding -->
+<!-- New user onboarding (Instagram-style entry page) -->
 <div class="modal-overlay open" id="onboarding-overlay" style="z-index:400;">
-  <div class="modal" style="max-width:380px;">
-    <div class="modal-body" style="text-align:center;padding-top:30px;">
-      <div class="logo" style="font-size:26px;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px;"><svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg2)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Pulse</div>
-      <p style="color:var(--text-soft);font-size:13.5px;margin:0 0 20px;">Pick a username to get started — that's it, no password needed.</p>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px;">
-        <div style="width:88px;height:88px;border-radius:50%;background:var(--ring);padding:3px;">
-          <img id="ob-avatar-preview" src="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">
-        </div>
-        <button class="tab-btn" style="flex:none;padding:7px 14px;" onclick="document.getElementById('ob-file-input').click()">Choose photo (optional)</button>
-        <input type="file" id="ob-file-input" accept="image/*" style="display:none">
-      </div>
-      <label class="field-label" style="text-align:left;">Name</label>
-      <input id="ob-name-input" type="text" placeholder="Your name">
-      <label class="field-label" style="text-align:left;">Username</label>
-      <input id="ob-username-input" type="text" placeholder="lowercase, 3-20 chars">
-      <label class="field-label" style="text-align:left;">Bio (optional)</label>
-      <input id="ob-bio-input" type="text" placeholder="Say something about you">
-      <div class="agree-row"><input type="checkbox" id="ob-agree"><span>By continuing you agree to our <a href="#" onclick="openPrivacy();return false;">Privacy Policy</a></span></div>
-      <button class="share-btn" id="ob-continue-btn" onclick="finishOnboarding(false)">Continue</button>
-      <button class="ghost-btn" onclick="finishOnboarding(true)">Skip for now</button>
-      <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
-        <button class="toggle-theme" style="font-size:12px;padding:7px 12px;" onclick="showEmailAuth('signup')">✉ Sign up with email</button>
-        <button class="toggle-theme" style="font-size:12px;padding:7px 12px;" onclick="showEmailAuth('login')">🔒 Log in with email</button>
-      </div>
-      <div class="or-divider"><div class="l"></div><span>or</span><div class="l"></div></div>
-      <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Continue with Google</button>
-    </div>
+  <div class="auth-page">
+    <svg viewBox="0 0 48 48" width="64" height="64" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg2)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="auth-wordmark">Pulse</div>
+    <p class="auth-tagline">Sign up to see photos and songs from your friends.</p>
+    <div class="auth-avatar"><img id="ob-avatar-preview" src=""></div>
+    <button class="auth-avatar-btn" onclick="document.getElementById('ob-file-input').click()">Add profile photo</button>
+    <input type="file" id="ob-file-input" accept="image/*" style="display:none">
+    <input id="ob-name-input" type="text" class="auth-field" placeholder="Full Name">
+    <input id="ob-username-input" type="text" class="auth-field" placeholder="Username">
+    <input id="ob-bio-input" type="text" class="auth-field" placeholder="Bio (optional)">
+    <button class="auth-continue" id="ob-continue-btn" onclick="finishOnboarding(false)">Continue</button>
+    <button class="auth-skip" onclick="finishOnboarding(true)">Skip for now</button>
+    <div class="or-divider"><div class="l"></div><span>OR</span><div class="l"></div></div>
+    <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Continue with Google</button>
+    <div class="auth-foot">Have an account? <a onclick="showEmailAuth('login')">Log in</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a onclick="showEmailAuth('signup')">Sign up with email</a></div>
+    <div class="agree-row" style="justify-content:center;margin-top:14px;"><input type="checkbox" id="ob-agree"><span>By continuing you agree to our <a href="#" onclick="openPrivacy();return false;">Privacy Policy</a></span></div>
+    <div class="auth-brand-foot">© 2026 PULSE</div>
   </div>
 </div>
 
