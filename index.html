@@ -294,6 +294,12 @@
   .or-divider{display:flex;align-items:center;gap:8px;margin:12px 0 4px;}
   .or-divider .l{flex:1;height:1px;background:var(--border);}
   .or-divider span{font-size:11.5px;color:var(--text-faint);}
+  .agree-row{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text-soft);margin-top:12px;text-align:left;}
+  .agree-row input{margin-top:1px;accent-color:var(--accent-d);flex-shrink:0;}
+  .agree-row a{color:var(--accent-d);font-weight:600;text-decoration:underline;}
+  .pp-body{font-size:13px;line-height:1.6;max-height:52vh;overflow-y:auto;padding-right:6px;}
+  .pp-body h4{margin:14px 0 4px;font-size:13.5px;color:var(--text);}
+  .pp-body p{margin:0 0 8px;color:var(--text-soft);}
 
   /* post-viewer modal (reuses .post look, wider) */
   #post-modal .modal{max-width:480px;background:transparent;box-shadow:none;position:relative;}
@@ -608,7 +614,7 @@
     <div class="side-head"><span>Recent people</span></div>
     <div id="suggestions"></div>
     <div class="side-footer">
-      About · Help · Press · API · Jobs · Privacy · Terms<br>
+      About · Help · Press · API · Jobs · <a href="#" onclick="openPrivacy();return false;">Privacy</a> · Terms<br>
       © 2026 PULSE — live
     </div>
   </div>
@@ -822,6 +828,7 @@
       <input id="ob-username-input" type="text" placeholder="lowercase, 3-20 chars">
       <label class="field-label" style="text-align:left;">Bio (optional)</label>
       <input id="ob-bio-input" type="text" placeholder="Say something about you">
+      <div class="agree-row"><input type="checkbox" id="ob-agree"><span>By continuing you agree to our <a href="#" onclick="openPrivacy();return false;">Privacy Policy</a></span></div>
       <button class="share-btn" id="ob-continue-btn" onclick="finishOnboarding(false)">Continue</button>
       <button class="ghost-btn" onclick="finishOnboarding(true)">Skip for now</button>
       <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
@@ -830,6 +837,38 @@
       </div>
       <div class="or-divider"><div class="l"></div><span>or</span><div class="l"></div></div>
       <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Continue with Google</button>
+    </div>
+  </div>
+</div>
+
+<!-- Privacy policy -->
+<div class="modal-overlay" id="privacy-modal" style="z-index:450;" onclick="if(event.target===this)closePrivacy()">
+  <div class="modal">
+    <div class="modal-head"><h3>Privacy Policy</h3><button onclick="closePrivacy()">&times;</button></div>
+    <div class="modal-body">
+      <div class="pp-body">
+        <p style="color:var(--text-soft);">Effective date: 29 September 2026</p>
+        <p>Pulse is a social photo-sharing app. This policy explains what information the app handles and how.</p>
+        <h4>1. What we collect</h4>
+        <p>When you use Pulse we store: your username, display name, bio and profile photo; the photos, captions, comments, likes and stories you post; the songs you add to the shared library; the messages you send to other users; and your follows and saved posts. If you sign up with email or Google, we also store your email address.</p>
+        <h4>2. Where it is stored</h4>
+        <p>Your content is stored in a Supabase cloud database and its file storage. Photos and songs you upload are viewable by anyone who uses Pulse \u2014 that is the point of a social app. Do not upload anything you want to keep private.</p>
+        <h4>3. On your device</h4>
+        <p>We save your login session and small preferences (like which stories you have seen) in your browser's local storage. We do not use advertising cookies or third-party trackers.</p>
+        <h4>4. Google sign-in</h4>
+        <p>If you tap \u201cContinue with Google\u201d, Google shares your basic account details (name and email) with us so we can sign you in. We never see or store your Google password.</p>
+        <h4>5. What we do not do</h4>
+        <p>We do not sell your data, we do not show ads, and we do not build advertising profiles.</p>
+        <h4>6. Deleting your data</h4>
+        <p>You can delete your posts, stories and messages at any time inside the app. To delete your account and everything in it, email luckychouhan4404@gmail.com and your profile, posts and messages will be removed.</p>
+        <h4>7. Children</h4>
+        <p>Pulse is not intended for children under 13.</p>
+        <h4>8. Changes to this policy</h4>
+        <p>If this policy changes, this page will be updated. Continuing to use Pulse after a change means you accept the updated policy.</p>
+        <h4>9. Contact</h4>
+        <p>Questions? Email luckychouhan4404@gmail.com.</p>
+      </div>
+      <button class="share-btn" onclick="agreePrivacy()">I agree</button>
     </div>
   </div>
 </div>
@@ -851,6 +890,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

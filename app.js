@@ -214,6 +214,8 @@ document.getElementById('ob-file-input').addEventListener('change', function(e){
 
 async function finishOnboarding(skip){
   const btn = document.getElementById('ob-continue-btn');
+  var agreeCb = document.getElementById('ob-agree');
+  if(agreeCb && !agreeCb.checked){ toast('Please agree to the Privacy Policy first'); return; }
   btn.disabled = true; btn.textContent = 'Setting up...';
   try {
     let username = document.getElementById('ob-username-input').value.trim().toLowerCase();
@@ -245,6 +247,7 @@ async function finishOnboarding(skip){
     }
     const q = await supa.from('profiles').select('*').eq('id', authUid).single();
     me = q.data;
+    try { localStorage.setItem('pulse-agreed-v1', '1'); } catch(e2){}
     document.getElementById('onboarding-overlay').classList.remove('open');
     await afterLogin();
     toast('Welcome to Pulse, ' + esc(me.username) + '!');
@@ -403,6 +406,20 @@ async function googleSignIn(){
     console.error(e);
     toast('Could not start Google sign-in');
   }
+}
+
+/* ---------------- Privacy policy ---------------- */
+function openPrivacy(){
+  document.getElementById('privacy-modal').classList.add('open');
+}
+function closePrivacy(){
+  document.getElementById('privacy-modal').classList.remove('open');
+}
+function agreePrivacy(){
+  var cb = document.getElementById('ob-agree');
+  if(cb) cb.checked = true;
+  try { localStorage.setItem('pulse-agreed-v1', '1'); } catch(e){}
+  closePrivacy();
 }
 
 /* ---------------- Storage upload ---------------- */
@@ -2666,6 +2683,7 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('create-modal').classList.contains('open')) closeCreateModal();
   else if(document.getElementById('music-modal').classList.contains('open')) closeMusicPicker();
   else if(document.getElementById('edit-profile-modal').classList.contains('open')) closeEditProfile();
+  else if(document.getElementById('privacy-modal').classList.contains('open')) closePrivacy();
   else if(document.getElementById('email-auth-modal').classList.contains('open')) closeEmailAuth();
   else if(document.getElementById('add-email-modal').classList.contains('open')) closeAddEmail();
 });
@@ -2742,6 +2760,7 @@ function updatePresenceDots(){
 
 /* ---------------- Init ---------------- */
 (function(){
+  try { if(localStorage.getItem('pulse-agreed-v1')){ var cbAgree = document.getElementById('ob-agree'); if(cbAgree) cbAgree.checked = true; } } catch(e){}
   var ph = initialsAvatar('?');
   ['topbar-avatar','bottomnav-avatar','sidecol-avatar','ob-avatar-preview'].forEach(function(id){
     var el = document.getElementById(id);
