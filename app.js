@@ -210,7 +210,11 @@ document.getElementById('ob-file-input').addEventListener('change', function(e){
   if(!file) return;
   pendingObAvatarFile = file;
   const reader = new FileReader();
-  reader.onload = function(ev){ document.getElementById('ob-avatar-preview').src = ev.target.result; };
+  reader.onload = function(ev){
+    document.getElementById('ob-avatar-preview').src = ev.target.result;
+    var ph = document.getElementById('ob-photo-btn');
+    if(ph) ph.classList.add('has-img');
+  };
   reader.readAsDataURL(file);
 });
 
@@ -2798,7 +2802,7 @@ function updatePresenceDots(){
 (function(){
   try { if(localStorage.getItem('pulse-agreed-v1')){ var cbAgree = document.getElementById('ob-agree'); if(cbAgree) cbAgree.checked = true; } } catch(e){}
   var ph = initialsAvatar('?');
-  ['topbar-avatar','bottomnav-avatar','sidecol-avatar','ob-avatar-preview'].forEach(function(id){
+  ['topbar-avatar','bottomnav-avatar','sidecol-avatar'].forEach(function(id){
     var el = document.getElementById(id);
     if(el && !el.getAttribute('src')) el.src = ph;
   });
