@@ -557,24 +557,39 @@
   .post-speaker.playing .eq i:nth-child(2){animation-delay:.15s;}
   .post-speaker.playing .eq i:nth-child(3){animation-delay:.3s;}
 
-  /* ---------- Instagram-style entry screen ---------- */
-  #onboarding-overlay{background:var(--bg);align-items:flex-start;overflow-y:auto;padding:56px 0 28px;}
-  .auth-page{width:100%;max-width:360px;margin:0 auto;padding:0 10px;text-align:center;}
-  .auth-wordmark{font-family:'Poppins',sans-serif;font-weight:700;font-size:36px;letter-spacing:.3px;background:var(--ring);-webkit-background-clip:text;background-clip:text;color:transparent;margin:12px 0 12px;}
-  .auth-tagline{font-size:16px;color:var(--text);font-weight:600;line-height:1.45;margin:0 auto 20px;max-width:300px;}
-  .auth-avatar{width:78px;height:78px;border-radius:50%;background:var(--ring);padding:3px;margin:0 auto;}
-  .auth-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:var(--surface);}
-  .auth-avatar-btn{background:none;border:none;color:#0095F6;font-weight:600;font-size:12.5px;margin:9px 0 18px;display:inline-block;padding:0;}
-  #onboarding-overlay .auth-field{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:12px 14px;font-size:15px;color:var(--text);outline:none;margin-bottom:9px;text-align:left;box-sizing:border-box;}
-  #onboarding-overlay .auth-field:focus{border-color:#a8a8a8;}
-  .auth-continue{width:100%;padding:11px;border:none;border-radius:10px;background:#0095F6;color:#fff;font-weight:600;font-size:14.5px;margin-top:6px;}
-  .auth-continue:disabled{opacity:.4;cursor:default;}
-  .auth-skip{background:none;border:none;color:var(--text-soft);font-size:13.5px;margin-top:12px;display:inline-block;padding:0;}
-  #onboarding-overlay .or-divider{margin:16px 0 10px;}
-  #onboarding-overlay .google-btn{background:var(--surface);color:var(--text);}
-  .auth-foot{font-size:13px;color:var(--text-soft);margin-top:16px;}
-  .auth-foot a{color:var(--text);font-weight:600;cursor:pointer;}
-  .auth-brand-foot{margin-top:36px;font-size:11.5px;color:var(--text-faint);}
+  /* ---------- official split-screen entry page ---------- */
+  #onboarding-overlay{background:#000;align-items:stretch;overflow-y:auto;padding:0;}
+  .auth-full{width:100%;max-width:935px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:44px;padding:32px 20px;min-height:100%;}
+  .auth-hero{flex:1;display:flex;flex-direction:column;gap:34px;max-width:470px;}
+  .hero-headline{font-size:33px;line-height:1.3;color:#fff;font-weight:600;padding:0 8px;}
+  .hero-headline .grad{background:var(--ring);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero-collage{position:relative;width:400px;height:300px;margin:0 auto;}
+  .hc-card{position:absolute;width:170px;height:215px;border-radius:20px;overflow:hidden;border:5px solid #151515;box-shadow:0 14px 34px rgba(0,0,0,.55);}
+  .hc-card .collage-img{width:100%;height:100%;object-fit:cover;display:block;}
+  .hc-card .collage-img:not([src]){display:none;}
+  .hc1{left:6px;top:26px;transform:rotate(-8deg);background:linear-gradient(135deg,#F58529,#DD2A7B);}
+  .hc2{left:130px;top:66px;transform:rotate(6deg);z-index:2;background:linear-gradient(135deg,#8134AF,#515BD4);}
+  .hc3{left:248px;top:6px;transform:rotate(-2deg);z-index:3;background:linear-gradient(135deg,#DD2A7B,#515BD4);}
+  .hc-emoji{position:absolute;font-size:34px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));}
+  .hc1 .hc-emoji{bottom:10px;right:12px;}
+  .hc2 .hc-emoji{top:10px;left:12px;font-size:28px;}
+  .hc3 .hc-emoji{bottom:12px;left:14px;font-size:30px;}
+  .auth-right{width:100%;max-width:350px;display:flex;flex-direction:column;gap:12px;}
+  .auth-card{background:#121212;border:1px solid #262626;border-radius:16px;padding:36px 32px 26px;display:flex;flex-direction:column;gap:10px;}
+  .auth-card h2{margin:0 0 12px;font-size:20px;color:#fff;font-weight:600;text-align:center;}
+  #onboarding-overlay .auth-field{background:#0a0a0a;border:1px solid #333;border-radius:10px;padding:12px 14px;font-size:15px;color:#fff;outline:none;text-align:left;box-sizing:border-box;width:100%;}
+  #onboarding-overlay .auth-field:focus{border-color:#555;}
+  .auth-hint{font-size:11.5px;color:#8a8a8a;text-align:center;}
+  #onboarding-overlay .or-divider{margin:10px 0 0;}
+  #onboarding-overlay .or-divider .l{background:#262626;}
+  #onboarding-overlay .or-divider span{color:#666;}
+  #onboarding-overlay .google-btn{background:#1a1a1a;color:#fff;border:1px solid #2e2e2e;}
+  .auth-box2{background:#121212;border:1px solid #262626;border-radius:16px;padding:16px;text-align:center;font-size:14px;color:#8a8a8a;}
+  .auth-box2 a{color:#fff;font-weight:600;cursor:pointer;font-size:14px;}
+  #onboarding-overlay .agree-row{color:#8a8a8a;font-size:11.5px;justify-content:center;margin-top:4px;}
+  #onboarding-overlay .agree-row a{color:#e0f1ff;}
+  .auth-brand-foot{color:#666;font-size:11.5px;text-align:center;margin-top:2px;}
+  @media(max-width:900px){ .auth-hero{display:none;} .auth-full{padding:22px 16px;} }
 
   @media(min-width:700px){ .search{display:flex;} }
   @media(min-width:900px){
@@ -808,7 +823,7 @@
 </div>
 
 <!-- Email sign up / log in -->
-<div class="modal-overlay" id="email-auth-modal" onclick="if(event.target===this)closeEmailAuth()">
+<div class="modal-overlay" id="email-auth-modal" style="z-index:500;" onclick="if(event.target===this)closeEmailAuth()">
   <div class="modal" style="max-width:380px;">
     <div class="modal-head"><h3 id="email-auth-title">Sign up with email</h3><button onclick="closeEmailAuth()">&times;</button></div>
     <div class="modal-body">
@@ -828,25 +843,36 @@
   </div>
 </div>
 
-<!-- New user onboarding (Instagram-style entry page) -->
+<!-- New user onboarding (official split-screen entry page) -->
 <div class="modal-overlay open" id="onboarding-overlay" style="z-index:400;">
-  <div class="auth-page">
-    <svg viewBox="0 0 48 48" width="64" height="64" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg2)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div class="auth-wordmark">Pulse</div>
-    <p class="auth-tagline">Sign up to see photos and songs from your friends.</p>
-    <div class="auth-avatar"><img id="ob-avatar-preview" src=""></div>
-    <button class="auth-avatar-btn" onclick="document.getElementById('ob-file-input').click()">Add profile photo</button>
-    <input type="file" id="ob-file-input" accept="image/*" style="display:none">
-    <input id="ob-name-input" type="text" class="auth-field" placeholder="Full Name">
-    <input id="ob-username-input" type="text" class="auth-field" placeholder="Username">
-    <input id="ob-bio-input" type="text" class="auth-field" placeholder="Bio (optional)">
-    <button class="auth-continue" id="ob-continue-btn" onclick="finishOnboarding(false)">Continue</button>
-    <button class="auth-skip" onclick="finishOnboarding(true)">Skip for now</button>
-    <div class="or-divider"><div class="l"></div><span>OR</span><div class="l"></div></div>
-    <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Continue with Google</button>
-    <div class="auth-foot">Have an account? <a onclick="showEmailAuth('login')">Log in</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a onclick="showEmailAuth('signup')">Sign up with email</a></div>
-    <div class="agree-row" style="justify-content:center;margin-top:14px;"><input type="checkbox" id="ob-agree"><span>By continuing you agree to our <a href="#" onclick="openPrivacy();return false;">Privacy Policy</a></span></div>
-    <div class="auth-brand-foot">© 2026 PULSE</div>
+  <div class="auth-full">
+    <div class="auth-hero">
+      <div><svg viewBox="0 0 48 48" width="64" height="64" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg2)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="hero-headline">See everyday moments from<br>your <span class="grad">close friends</span>.</div>
+      <div class="hero-collage">
+        <div class="hc-card hc1"><img class="collage-img" alt=""><span class="hc-emoji">❤️</span></div>
+        <div class="hc-card hc2"><img class="collage-img" alt=""><span class="hc-emoji">😊</span></div>
+        <div class="hc-card hc3"><img class="collage-img" alt=""><span class="hc-emoji">⭐</span></div>
+      </div>
+    </div>
+    <div class="auth-right">
+      <div class="auth-card">
+        <h2>Log into Pulse</h2>
+        <input id="ob-username-input" type="text" class="auth-field" placeholder="Username or email">
+        <input id="ob-password-input" type="password" class="auth-field" placeholder="Password">
+        <button class="auth-continue" id="ob-continue-btn" onclick="entrySubmit()">Log in</button>
+        <div class="auth-hint">New here? A username alone creates your account — no password needed.</div>
+        <div class="or-divider"><div class="l"></div><span>OR</span><div class="l"></div></div>
+        <button class="google-btn" onclick="googleSignIn()"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>Log in with Google</button>
+        <input type="file" id="ob-file-input" accept="image/*" style="display:none">
+        <input type="hidden" id="ob-name-input" value="">
+        <input type="hidden" id="ob-bio-input" value="">
+        <img id="ob-avatar-preview" src="" style="display:none">
+        <label class="agree-row" style="justify-content:center;margin-top:8px;"><input type="checkbox" id="ob-agree"><span>By continuing you agree to our <a href="#" onclick="openPrivacy();return false;">Privacy Policy</a></span></label>
+      </div>
+      <div class="auth-box2">Want to use email instead? <a onclick="showEmailAuth('signup')">Sign up with email</a></div>
+      <div class="auth-brand-foot">© 2026 PULSE</div>
+    </div>
   </div>
 </div>
 
@@ -861,11 +887,11 @@
         <h4>1. What we collect</h4>
         <p>When you use Pulse we store: your username, display name, bio and profile photo; the photos, captions, comments, likes and stories you post; the songs you add to the shared library; the messages you send to other users; and your follows and saved posts. If you sign up with email or Google, we also store your email address.</p>
         <h4>2. Where it is stored</h4>
-        <p>Your content is stored in a Supabase cloud database and its file storage. Photos and songs you upload are viewable by anyone who uses Pulse \u2014 that is the point of a social app. Do not upload anything you want to keep private.</p>
+        <p>Your content is stored in a Supabase cloud database and its file storage. Photos and songs you upload are viewable by anyone who uses Pulse — that is the point of a social app. Do not upload anything you want to keep private.</p>
         <h4>3. On your device</h4>
         <p>We save your login session and small preferences (like which stories you have seen) in your browser's local storage. We do not use advertising cookies or third-party trackers.</p>
         <h4>4. Google sign-in</h4>
-        <p>If you tap \u201cContinue with Google\u201d, Google shares your basic account details (name and email) with us so we can sign you in. We never see or store your Google password.</p>
+        <p>If you tap “Continue with Google”, Google shares your basic account details (name and email) with us so we can sign you in. We never see or store your Google password.</p>
         <h4>5. What we do not do</h4>
         <p>We do not sell your data, we do not show ads, and we do not build advertising profiles.</p>
         <h4>6. Deleting your data</h4>
@@ -899,6 +925,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

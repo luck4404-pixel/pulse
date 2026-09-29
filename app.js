@@ -163,8 +163,10 @@ async function boot(){
     if(me){
       document.getElementById('onboarding-overlay').classList.remove('open');
       await afterLogin();
+    } else {
+      populateEntryCollage();
     }
-    // else: onboarding modal is shown by default (open class in markup)
+    // the entry screen stays open when there is no profile yet
   } catch(e){
     console.error(e);
     document.getElementById('main-col').innerHTML =
@@ -406,6 +408,40 @@ async function googleSignIn(){
     console.error(e);
     toast('Could not start Google sign-in');
   }
+}
+
+/* ---------------- Entry page (log in / quick account) ---------------- */
+async function entrySubmit(){
+  var idEl = document.getElementById('ob-username-input');
+  var id = (idEl ? idEl.value : '').trim().toLowerCase();
+  var pwEl = document.getElementById('ob-password-input');
+  var pw = pwEl ? pwEl.value : '';
+  if(!id){ toast('Please enter your username or email'); return; }
+  if(id.indexOf('@') > 0){
+    if(!pw){ toast('Enter the password for this email account'); return; }
+    emailAuthMode = 'login';
+    document.getElementById('ea-email').value = id;
+    document.getElementById('ea-password').value = pw;
+    await submitEmailAuth();
+    if(pwEl) pwEl.value = '';
+  } else {
+    // username only — creates the quick account (no password needed)
+    finishOnboarding(false);
+  }
+}
+
+/* fill the entry-page collage with real photos from the app */
+function populateEntryCollage(){
+  if(!supa) return;
+  supa.from('posts').select('image_url').order('created_at', { ascending: false }).limit(3)
+    .then(function(r){
+      if(!r.data || !r.data.length) return;
+      var imgs = document.querySelectorAll('.collage-img');
+      for(var i=0;i<imgs.length;i++){
+        var p = r.data[i % r.data.length];
+        if(p && p.image_url) imgs[i].src = p.image_url;
+      }
+    }, function(){});
 }
 
 /* ---------------- Privacy policy ---------------- */
