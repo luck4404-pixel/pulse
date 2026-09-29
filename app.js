@@ -2820,6 +2820,31 @@ function updatePresenceDots(){
   });
 }
 
+/* ---------------- Installable app (PWA) ---------------- */
+var deferredInstall = null;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  deferredInstall = e;
+  var b = document.getElementById('install-btn');
+  if(b) b.style.display = 'flex';
+});
+window.addEventListener('appinstalled', function(){
+  deferredInstall = null;
+  var b = document.getElementById('install-btn');
+  if(b) b.style.display = 'none';
+  toast('Pulse installed! Check your home screen');
+});
+function installApp(){
+  if(!deferredInstall){
+    toast('Open your browser menu and choose "Install app" or "Add to Home screen"');
+    return;
+  }
+  deferredInstall.prompt();
+  deferredInstall.userChoice.then(function(){ deferredInstall = null; });
+  var b = document.getElementById('install-btn');
+  if(b) b.style.display = 'none';
+}
+
 /* ---------------- Init ---------------- */
 (function(){
   try { if(localStorage.getItem('pulse-agreed-v1')){ var cbAgree = document.getElementById('ob-agree'); if(cbAgree) cbAgree.checked = true; } } catch(e){}
@@ -2830,3 +2855,8 @@ function updatePresenceDots(){
   });
 })();
 boot();
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('service worker failed', e); });
+  });
+}
