@@ -202,6 +202,8 @@ async function afterLogin(){
   setupPresence();
   var nb = document.getElementById('notif-enable-btn');
   if(nb && !localStorage.getItem('pulse-push-on')) nb.style.display = 'flex';
+  var tb = document.getElementById('test-push-btn');
+  if(tb && localStorage.getItem('pulse-push-on')) tb.style.display = 'flex';
 }
 
 function updateMeUI(){
@@ -582,12 +584,12 @@ function saveProbeCache(){
 function loadFeedCache(){
   var c = null;
   try { c = JSON.parse(localStorage.getItem('pulse-feed-cache-v1') || 'null'); } catch(e){ c = null; }
-  if(c && c.posts && c.posts.length && (Date.now() - c.t) < 15*60*1000) return c;
+  if(c && c.uid === me.id && c.posts && c.posts.length && (Date.now() - c.t) < 15*60*1000) return c;
   return null;
 }
 function saveFeedCache(){
   try {
-    localStorage.setItem('pulse-feed-cache-v1', JSON.stringify({ t: Date.now(), posts: posts.slice(0, 12), stories: storiesByUser }));
+    localStorage.setItem('pulse-feed-cache-v1', JSON.stringify({ t: Date.now(), uid: me.id, posts: posts.slice(0, 12), stories: storiesByUser }));
   } catch(e){}
 }
 
@@ -2851,6 +2853,22 @@ async function enableNotifications(){
   } catch(e){
     console.error(e);
     toast('Could not turn on notifications');
+  }
+}
+
+async function testPushNotification(){
+  try {
+    var r = await fetch('https://mvbojueciwemmjohxvyh.supabase.co/functions/v1/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ record: { user_id: me.id, type: 'like' } })
+    });
+    var t = await r.text();
+    if(t === 'ok') toast('Test sent! You should see a notification now \ud83d\udd14');
+    else toast('Server answered: ' + (t || r.status));
+  } catch(e){
+    console.error(e);
+    toast('Could not reach the notify server');
   }
 }
 
