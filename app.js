@@ -106,6 +106,8 @@ let seenStoryIds = new Set();
 try { seenStoryIds = new Set(JSON.parse(localStorage.getItem('pulse-seen-stories') || '[]')); } catch(e){}
 let profileTab = 'posts';
 let exploreSearch = '';
+let exploreSearchMode = 'posts';   // 'posts' | 'people'
+let peopleCache = { term: null, list: null };
 let postModalOpenId = null;
 let lastViewedProfile = null;
 let returnView = 'feed';
@@ -968,7 +970,7 @@ function onSearch(v, source){
   if(top && top !== source) top.value = v;
   if(inGrid && inGrid !== source) inGrid.value = v;
   if(currentView === 'explore'){
-    if(document.getElementById('explore-grid')) renderExploreGrid();
+    if(document.getElementById('explore-results')) renderExploreResults();
     else renderExplore();
   }
 }
@@ -977,8 +979,69 @@ function renderExplore(){
   document.getElementById('main-col').innerHTML =
     '<div class="explore-search"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
     + '<input id="explore-search-input" placeholder="Search people and posts" value="' + esc(exploreSearch) + '" oninput="onSearch(this.value,this)"></div>'
-    + '<div class="explore-grid" id="explore-grid"></div>';
+    + '<div class="explore-tabs">'
+      + '<button class="explore-tab ' + (exploreSearchMode === 'posts' ? 'active' : '') + '" onclick="setExploreMode(\'posts\')">Posts</button>'
+      + '<button class="explore-tab ' + (exploreSearchMode === 'people' ? 'active' : '') + '" onclick="setExploreMode(\'people\')">People</button>'
+    + '</div>'
+    + '<div id="explore-results"></div>';
+  renderExploreResults();
+}
+function setExploreMode(m){
+  exploreSearchMode = m;
+  renderExplore();
+}
+function renderExploreResults(){
+  var res = document.getElementById('explore-results');
+  if(!res) return;
+  if(exploreSearchMode === 'people'){
+    renderPeopleResults();
+    return;
+  }
+  res.innerHTML = '<div class="explore-grid" id="explore-grid"></div>';
   renderExploreGrid();
+}
+
+/* People tab: matching users + follow buttons */
+async function renderPeopleResults(){
+  var res = document.getElementById('explore-results');
+  if(!res) return;
+  var term = exploreSearch.trim();
+  if(peopleCache.term === term && peopleCache.list){
+    paintPeople(peopleCache.list);
+    return;
+  }
+  res.innerHTML = '<div class="empty-note">Searching people\u2026</div>';
+  try {
+    var q;
+    if(term){
+      q = await supa.from('profiles').select('id,username,display_name,avatar_url').ilike('username', '%' + term + '%').limit(30);
+    } else {
+      q = await supa.from('profiles').select('id,username,display_name,avatar_url').neq('id', me.id).order('created_at', { ascending: false }).limit(12);
+    }
+    if(q.error) throw q.error;
+    var list = (q.data || []).filter(function(p){ return p.id !== me.id; });
+    peopleCache = { term: term, list: list };
+    if(document.getElementById('explore-results')) paintPeople(list);
+  } catch(e){
+    console.error(e);
+    if(document.getElementById('explore-results')) document.getElementById('explore-results').innerHTML = '<div class="empty-note">Could not load people.</div>';
+  }
+}
+function paintPeople(list){
+  var res = document.getElementById('explore-results');
+  if(!res) return;
+  if(!list.length){
+    res.innerHTML = '<div class="empty-note">No people found' + (exploreSearch ? ' for that search.' : ' yet.') + '</div>';
+    return;
+  }
+  res.innerHTML = list.map(function(p){
+    var following = myFollows.has(p.id);
+    return '<div class="person-row" onclick="viewProfile(\'' + p.username + '\')">'
+      + '<img src="' + avatarOf(p) + '">'
+      + '<div class="pr-meta"><div class="pr-u">' + esc(p.username) + '</div><div class="pr-n">' + esc(p.display_name || '') + '</div></div>'
+      + '<button class="primary-btn" id="follow-btn-' + p.id + '" onclick="event.stopPropagation();toggleFollow(\'' + p.id + '\')">' + (following ? 'Following' : 'Follow') + '</button>'
+    + '</div>';
+  }).join('');
 }
 
 function renderExploreGrid(){
