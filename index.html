@@ -669,6 +669,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6a5.5 5.5 0 0 0-9.3-4A5.5 5.5 0 0 0 2.7 11c1.6 4 8.8 9 9.3 9.3.5-.3 7.7-5.3 9.3-9.3.5-1 .5-1.7.5-2.4Z"/></svg>
         <span class="badge-dot" id="notif-dot" style="display:none;"></span>
       </button>
+      <button class="icon-btn" id="notif-enable-top" style="display:none;" onclick="enableNotifications()" title="Turn on push notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge-dot" style="background:#2ecc71;"></span>
+      </button>
       <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5Z"/></svg>
       </button>
@@ -692,7 +696,6 @@
     <div class="side-head"><span>Recent people</span></div>
     <div id="suggestions"></div>
     <button class="toggle-theme" id="install-btn" style="display:none;width:100%;margin-top:12px;justify-content:center;" onclick="installApp()">⬇ Install app</button>
-    <button class="toggle-theme" id="test-push-btn" style="display:none;width:100%;margin-top:8px;justify-content:center;" onclick="testPushNotification()">🔔 Send test notification</button>
     <button class="toggle-theme" id="notif-enable-btn" style="display:none;width:100%;margin-top:8px;justify-content:center;" onclick="enableNotifications()">🔔 Turn on notifications</button>
     <div class="side-footer">
       About · Help · Press · API · Jobs · <a href="#" onclick="openPrivacy();return false;">Privacy</a> · Terms<br>
@@ -977,6 +980,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>

@@ -202,10 +202,12 @@ async function afterLogin(){
   await refreshData();
   setupRealtime();
   setupPresence();
-  var nb = document.getElementById('notif-enable-btn');
-  if(nb && !localStorage.getItem('pulse-push-on')) nb.style.display = 'flex';
-  var tb = document.getElementById('test-push-btn');
-  if(tb && localStorage.getItem('pulse-push-on')) tb.style.display = 'flex';
+  if(!localStorage.getItem('pulse-push-on')){
+    var nb = document.getElementById('notif-enable-btn');
+    if(nb) nb.style.display = 'flex';
+    var ntop = document.getElementById('notif-enable-top');
+    if(ntop) ntop.style.display = 'flex';
+  }
 }
 
 function updateMeUI(){
@@ -2913,29 +2915,14 @@ async function enableNotifications(){
     toast('Notifications on! \ud83d\udd14');
     var b = document.getElementById('notif-enable-btn');
     if(b) b.style.display = 'none';
+    var btop = document.getElementById('notif-enable-top');
+    if(btop) btop.style.display = 'none';
   } catch(e){
     console.error(e);
     toast('Could not turn on notifications');
   }
 }
 
-async function testPushNotification(){
-  try {
-    var sess = await supa.auth.getSession();
-    var token = sess.data && sess.data.session ? sess.data.session.access_token : '';
-    var r = await fetch('https://mvbojueciwemmjohxvyh.supabase.co/functions/v1/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ record: { user_id: me.id, type: 'like' } })
-    });
-    var t = await r.text();
-    if(t === 'ok') toast('Test sent! You should see a notification now \ud83d\udd14');
-    else toast('Server answered: ' + (t || r.status));
-  } catch(e){
-    console.error(e);
-    toast('Could not reach the notify server');
-  }
-}
 
 /* ---------------- Installable app (PWA) ---------------- */
 var deferredInstall = null;
