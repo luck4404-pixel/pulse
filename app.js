@@ -1370,6 +1370,7 @@ async function sendMessage(partnerId, text){
   }
   const r = await supa.from('messages').insert({ sender_id: me.id, recipient_id: partnerId, text: text });
   if(r.error){ toast('Could not send the message'); }
+  else if(partnerId !== me.id){ supa.from('notifications').insert({ user_id: partnerId, actor_id: me.id, type: 'message' }); }
   scheduleConvRefresh();
 }
 
@@ -1449,6 +1450,7 @@ async function sendChatFile(file, text){
     if(mediaMsgV2Ready) payload.file_bytes = file.size || null;
     var r = await supa.from('messages').insert(payload);
     if(r.error) throw r.error;
+    if(activeChat !== me.id) supa.from('notifications').insert({ user_id: activeChat, actor_id: me.id, type: 'message' });
     await fetchThread();
     renderChat();
     scheduleConvRefresh();
@@ -1502,10 +1504,11 @@ function renderNotifications(){
     else if(n.type === 'comment') text = 'commented on your post.';
     else if(n.type === 'follow') text = 'started following you.';
     else if(n.type === 'story_like') text = 'liked your story.';
+    else if(n.type === 'message') text = 'sent you a message.';
     else text = 'interacted with you.';
-    const icon = n.type === 'like' ? heartFilled : commentIcon;
+    const icon = n.type === 'like' ? heartFilled : (n.type === 'message' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3 3 10.5l7 3 3 7L21 3Z"/></svg>' : commentIcon);
     return '<div class="notif-row">'
-      + '<div style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer" onclick="viewProfile(\'' + actor.username + '\')">'
+      + '<div style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer" onclick="' + (n.type === 'message' && n.actor && n.actor.id ? 'openChat(\'' + n.actor.id + '\')' : 'viewProfile(\'' + actor.username + '\')') + '">'
       + (n.type === 'follow' ? '<img class="avt" src="' + avatarOf(actor) + '">' : '<div class="notif-icon">' + icon + '</div>')
       + '<div class="text"><b>' + esc(actor.username) + '</b> ' + text + ' <span class="time">' + timeAgo(n.created_at) + '</span></div>'
       + '</div>'

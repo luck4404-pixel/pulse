@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
     else if (n.type === 'comment') text = 'Someone commented on your post';
     else if (n.type === 'follow') text = 'Someone started following you';
     else if (n.type === 'story_like') text = 'Someone liked your story';
+    else if (n.type === 'message') text = 'Someone sent you a message';
 
     let sent = 0;
     await Promise.allSettled(subs.map((row) =>
