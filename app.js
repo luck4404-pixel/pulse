@@ -2921,9 +2921,11 @@ async function enableNotifications(){
 
 async function testPushNotification(){
   try {
+    var sess = await supa.auth.getSession();
+    var token = sess.data && sess.data.session ? sess.data.session.access_token : '';
     var r = await fetch('https://mvbojueciwemmjohxvyh.supabase.co/functions/v1/notify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ record: { user_id: me.id, type: 'like' } })
     });
     var t = await r.text();
