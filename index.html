@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Pulse — share the moment</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000">
@@ -641,6 +641,44 @@
     .bottomnav{display:none;}
     body{padding-bottom:0;}
   }
+  /* ---------- Phone layout (Instagram-style fixed screen) ---------- */
+  @media (max-width:700px){
+    html,body{overflow-x:hidden;}
+    body{
+      padding-bottom:calc(64px + env(safe-area-inset-bottom));
+      overscroll-behavior-y:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    /* compact top bar, safe under the notch */
+    .topbar{padding-top:env(safe-area-inset-top);}
+    .topbar-inner{padding:8px 12px;gap:8px;}
+    .logo{font-size:19px;gap:10px;}
+    .logo svg{width:34px;height:34px;}
+    #top-home-btn,#top-create-btn,#top-avatar-btn{display:none !important;}
+    .top-icons{gap:14px;}
+    .icon-btn svg{width:24px;height:24px;}
+    .avatar-btn{width:26px;height:26px;}
+    /* full-bleed feed */
+    .app{padding:0;gap:0;}
+    .main-col{max-width:100%;}
+    .post{border-radius:0;border-left:none;border-right:none;margin-bottom:10px;}
+    .post-media img{max-height:82vh;}
+    .post-caption{font-size:14.5px;}
+    .post-comment-list .c{font-size:14px;}
+    .post-user .uname{font-size:14px;}
+    .stories{padding:12px 10px 16px;gap:12px;}
+    /* keep iOS from zooming when a field is tapped (needs 16px) */
+    input,textarea,select{font-size:16px !important;}
+    /* thumb-sized bottom nav, clear of the home bar */
+    .bottomnav{padding:6px 0 calc(6px + env(safe-area-inset-bottom));}
+    .bottomnav button{padding:8px 0;min-width:56px;display:flex;justify-content:center;}
+    .bottomnav button svg{width:26px;height:26px;}
+    .bottomnav img.nav-avatar{width:26px;height:26px;}
+    .toast{bottom:calc(80px + env(safe-area-inset-bottom));max-width:88vw;}
+    /* modals slide up from the bottom, like a phone app */
+    .modal-overlay{padding:0;align-items:flex-end;}
+    .modal{max-width:100%;margin:0;border-radius:18px 18px 0 0;max-height:92dvh;overflow-y:auto;}
+  }
 </style>
 </head>
 <body>
@@ -655,14 +693,14 @@
       <input id="search-top" placeholder="Search" oninput="onSearch(this.value,this)" onfocus="showView('explore')">
     </div>
     <div class="top-icons">
-      <button class="icon-btn" onclick="showView('feed')" title="Home">
+      <button class="icon-btn" id="top-home-btn" onclick="showView('feed')" title="Home">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
       </button>
       <button class="icon-btn" onclick="showView('messages')" title="Messages">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3 3 10.5l7 3 3 7L21 3Z"/></svg>
         <span class="badge-dot" id="msg-dot" style="display:none;"></span>
       </button>
-      <button class="icon-btn" onclick="openCreateModal('post')" title="New post">
+      <button class="icon-btn" id="top-create-btn" onclick="openCreateModal('post')" title="New post">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       </button>
       <button class="icon-btn" onclick="showView('notifications')" title="Notifications">
@@ -676,7 +714,7 @@
       <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5Z"/></svg>
       </button>
-      <button class="icon-btn avatar-btn" onclick="showView('profile')" title="Profile">
+      <button class="icon-btn avatar-btn" id="top-avatar-btn" onclick="showView('profile')" title="Profile">
         <img id="topbar-avatar" src="" alt="">
       </button>
     </div>
