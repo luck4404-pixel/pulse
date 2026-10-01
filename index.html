@@ -643,6 +643,25 @@
     .bottomnav{display:none;}
     body{padding-bottom:0;}
   }
+  /* ---------- Follow-a-few screen + invites ---------- */
+  .f5-overlay{position:fixed;inset:0;background:var(--bg);z-index:120;display:none;flex-direction:column;}
+  .f5-overlay.open{display:flex;}
+  .f5-head{padding:calc(18px + env(safe-area-inset-top)) 18px 12px;border-bottom:1px solid var(--border);background:var(--surface);}
+  .f5-head h2{margin:0 0 4px;font-size:20px;}
+  .f5-head p{margin:0;font-size:13.5px;color:var(--text-soft);}
+  .f5-count{font-size:12.5px;color:var(--accent-d);font-weight:600;margin-top:6px;}
+  .f5-list{flex:1;overflow-y:auto;padding:6px 0 96px;}
+  .f5-row{display:flex;align-items:center;gap:12px;padding:12px 18px;}
+  .f5-row img{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--bg);}
+  .f5-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3;}
+  .f5-name b{font-size:14.5px;}
+  .f5-name span{font-size:12.5px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .f5-btn{background:#0095F6;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:600;font-size:13.5px;font-family:inherit;cursor:pointer;}
+  .f5-btn.following{background:var(--bg);color:var(--text);border:1px solid var(--border);}
+  .f5-foot{position:fixed;left:0;right:0;bottom:0;padding:12px 18px calc(14px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--border);}
+  .f5-foot button{width:100%;padding:13px 0;border:none;border-radius:10px;background:#0095F6;color:#fff;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;}
+  .invite-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12.5px;word-break:break-all;color:var(--text-soft);margin:4px 0 10px;}
+
   /* ---------- Settings ---------- */
   .set-wrap{max-width:600px;margin:0 auto;}
   .set-head{display:flex;align-items:center;gap:12px;padding:14px 2px 12px;}
@@ -1086,7 +1105,32 @@
   <button onclick="event.stopPropagation();closeImageViewer()" title="Close">&times;</button>
 </div>
 
+<!-- Follow a few people (new accounts) -->
+<div class="f5-overlay" id="follow5-overlay">
+  <div class="f5-head">
+    <h2>Find people to follow</h2>
+    <p>Follow a few people so your feed is not empty.</p>
+    <div class="f5-count" id="follow5-count"></div>
+  </div>
+  <div class="f5-list" id="follow5-list"></div>
+  <div class="f5-foot"><button id="follow5-done" onclick="closeFollow5()">Skip for now</button></div>
+</div>
+
+<!-- Invite friends -->
+<div class="modal-overlay" id="invite-modal" onclick="if(event.target===this)closeInvite()">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head"><h3>Invite friends</h3><button onclick="closeInvite()">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;color:var(--text-soft);margin:0 0 8px;line-height:1.5;">Send this link to a friend. When they join Pulse, they will follow you automatically.</p>
+      <div class="invite-box" id="invite-link-text"></div>
+      <div id="invite-count" style="font-size:12.5px;color:var(--accent-d);font-weight:600;text-align:center;margin-bottom:10px;"></div>
+      <button class="share-btn" onclick="shareInvite()">Share invite link</button>
+      <button class="ghost-btn" onclick="copyInvite()">Copy link</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 </body>
 </html>

@@ -130,6 +130,8 @@ let mediaUrlsReady = null;   // posts.media_urls column exists (multi-photo post
 let pendingChatFile = null;  // file staged via the paperclip — sent only when Send is tapped
 let msgMenuId = null;        // options-menu open for this message id
 let msgMenuMedia = null;     // media url of the message whose menu is open
+let pendingPostId = null;    // ?post=<id> link waiting to be opened
+var follow5People = [];      // people shown on the follow-a-few screen
 let msgMenuMine = false;
 let svILiked = false;       // do I like the current story item
 let svLikeCount = 0;
@@ -144,6 +146,7 @@ let presenceChannel = null;
 
 /* ---------------- Auth & boot ---------------- */
 async function boot(){
+  captureInvite(); // pick up ?invite=<username> and ?post=<id> before anything else
   document.getElementById('main-col').innerHTML = '<div class="empty-note">Loading your feed…</div>';
   if(!supa){
     document.getElementById('main-col').innerHTML = '<div class="empty-note">This app is not connected to a backend yet.<br>The site owner needs to add the Supabase keys.</div>';
@@ -203,6 +206,9 @@ async function afterLogin(){
   await refreshData();
   setupRealtime();
   setupPresence();
+  applyInvite();
+  if(pendingPostId){ var pid = pendingPostId; pendingPostId = null; openPostFromUrl(pid); }
+  try { if(myFollows.size === 0 && !localStorage.getItem('pulse-follow5-done')) setTimeout(openFollow5, 800); } catch(e){}
   if(!localStorage.getItem('pulse-push-on')){
     var nb = document.getElementById('notif-enable-btn');
     if(nb) nb.style.display = 'flex';
@@ -479,7 +485,8 @@ function agreePrivacy(){
 }
 
 /* ---------------- Storage upload ---------------- */
-async function uploadImage(file){
+async function uploadImage(file, maxDim){
+  file = await compressImage(file, maxDim || 1440, 0.82);
   const safeName = (file && file.name ? file.name : 'photo').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'photo';
   const path = me.id + '/' + Date.now() + '_' + safeName;
   const up = await supa.storage.from('media').upload(path, file);
@@ -868,7 +875,7 @@ function renderPost(p){
       + '<div class="action-left">'
         + '<button class="action-btn ' + (liked ? 'liked' : '') + '" onclick="likePost(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '</button>'
         + '<button class="action-btn" onclick="focusComment(\'' + p.id + '\')">' + commentIcon + '</button>'
-        + '<button class="action-btn" onclick="sharePost()">' + shareIcon + '</button>'
+        + '<button class="action-btn" onclick="sharePost(\'' + p.id + '\')">' + shareIcon + '</button>'
         + '<button class="action-btn" onclick="downloadPost(\'' + p.id + '\')" title="Download">' + downloadIcon + '</button>'
       + '</div>'
       + '<button class="action-btn ' + (saved ? 'saved' : '') + '" onclick="savePost(\'' + p.id + '\')">' + (saved ? bookmarkFilled : bookmarkOutline) + '</button>'
@@ -1411,6 +1418,7 @@ function openUrlViewer(url){
   document.getElementById('img-viewer').classList.add('open');
 }
 async function uploadMsgFile(file){
+  file = await compressImage(file, 1440, 0.82);
   var safeName = (file && file.name ? file.name : 'file').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'file';
   var path = me.id + '/msg_' + Date.now() + '_' + safeName;
   var up = await supa.storage.from('media').upload(path, file, { contentType: (file && file.type) || 'application/octet-stream' });
@@ -1742,13 +1750,30 @@ async function savePost(id){
   if(r.error){ toast('Could not save the post'); if(wasSaved) mySaved.add(id); else mySaved.delete(id); }
 }
 
-function sharePost(){
-  const url = location.href;
+function sharePost(id){
+  var url = location.origin + location.pathname + (id ? ('?post=' + encodeURIComponent(id)) : '');
+  var text = 'Look at this on Pulse';
   if(navigator.share){
-    navigator.share({ title: 'Pulse', url: url }).catch(function(){});
-  } else if(navigator.clipboard){
-    navigator.clipboard.writeText(url).then(function(){ toast('Link copied'); }, function(){});
+    navigator.share({ title: 'Pulse', text: text, url: url }).catch(function(){});
+    return;
   }
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(function(){ toast('Link copied - paste it anywhere'); }, function(){ toast(url); });
+    return;
+  }
+  toast(url);
+}
+async function openPostFromUrl(id){
+  if(!me || !id) return;
+  if(!postIndex[id]){
+    var q = await supa.from('posts')
+      .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+      .eq('id', id).maybeSingle();
+    if(q.error || !q.data) return;
+    posts.unshift(mapPost(q.data));
+    indexPosts();
+  }
+  openPostModal(id);
 }
 
 function focusComment(id){
@@ -2918,6 +2943,142 @@ function downloadMsgMedia(id){
   downloadMedia(m.media_url);
 }
 
+/* ---------------- Photo compression (keeps Pulse fast and cheap) ---------------- */
+function compressImage(file, maxDim, quality){
+  return new Promise(function(resolve){
+    try {
+      if(!file || !file.type || file.type.indexOf('image/') !== 0) return resolve(file);
+      if(file.type === 'image/gif') return resolve(file);
+      var max = maxDim || 1440;
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){
+        var done = false;
+        function finish(out){
+          if(done) return;
+          done = true;
+          try { URL.revokeObjectURL(url); } catch(e){}
+          resolve(out);
+        }
+        try {
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          if(!w || !h) return finish(file);
+          var scale = Math.min(1, max / Math.max(w, h));
+          if(scale === 1 && file.size < 400 * 1024) return finish(file);
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var c = document.createElement('canvas');
+          c.width = cw; c.height = ch;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, cw, ch);
+          ctx.drawImage(img, 0, 0, cw, ch);
+          c.toBlob(function(blob){
+            if(!blob || blob.size >= file.size * 0.92) return finish(file);
+            var name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+            finish(new File([blob], name, { type: 'image/jpeg' }));
+          }, 'image/jpeg', quality || 0.82);
+        } catch(e){ finish(file); }
+      };
+      img.onerror = function(){ try { URL.revokeObjectURL(url); } catch(e){} resolve(file); };
+      img.src = url;
+    } catch(e){ resolve(file); }
+  });
+}
+
+/* ---------------- Invites ---------------- */
+function inviteLink(){
+  return location.origin + location.pathname + '?invite=' + encodeURIComponent(me ? me.username : '');
+}
+function captureInvite(){
+  try {
+    var m = location.search.match(/[?&]invite=([^&]+)/);
+    if(m && m[1]){
+      var code = decodeURIComponent(m[1]).toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 20);
+      if(code) localStorage.setItem('pulse-invite-from', code);
+    }
+    var pm = location.search.match(/[?&]post=([^&]+)/);
+    if(pm && pm[1]) pendingPostId = decodeURIComponent(pm[1]);
+  } catch(e){}
+}
+async function applyInvite(){
+  var code = null, applied = null;
+  try { code = localStorage.getItem('pulse-invite-from'); applied = localStorage.getItem('pulse-invite-applied'); } catch(e){}
+  if(!code || !me || applied === '1') return;
+  try { localStorage.setItem('pulse-invite-applied', '1'); } catch(e){}
+  try {
+    var q = await supa.from('profiles').select('id,username').eq('username', code).maybeSingle();
+    var inviter = q.data;
+    if(!inviter || inviter.id === me.id) return;
+    if(!myFollows.has(inviter.id)){
+      myFollows.add(inviter.id);
+      await supa.from('follows').insert({ follower_id: me.id, following_id: inviter.id });
+      supa.from('notifications').insert({ user_id: inviter.id, actor_id: me.id, type: 'follow' })
+        .then(function(){}, function(){});
+    }
+    supa.from('profiles').update({ invited_by: code }).eq('id', me.id).then(function(){}, function(){});
+    toast('You joined via @' + esc(code) + ' - now following them');
+  } catch(e){ console.error(e); }
+}
+async function openInvite(){
+  var el = document.getElementById('invite-link-text');
+  if(el) el.textContent = inviteLink();
+  var cnt = document.getElementById('invite-count');
+  if(cnt){
+    cnt.textContent = '';
+    try {
+      var q = await supa.from('profiles').select('*', { count: 'exact', head: true }).eq('invited_by', me.username);
+      if(!q.error) cnt.textContent = (q.count || 0) + (q.count === 1 ? ' friend has joined' : ' friends have joined');
+    } catch(e){}
+  }
+  document.getElementById('invite-modal').classList.add('open');
+}
+function closeInvite(){ document.getElementById('invite-modal').classList.remove('open'); }
+function shareInvite(){
+  var link = inviteLink();
+  if(navigator.share){
+    navigator.share({ title: 'Pulse', text: 'Join me on Pulse', url: link }).catch(function(){});
+    return;
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent('Join me on Pulse - ' + link), '_blank');
+}
+function copyInvite(){
+  var link = inviteLink();
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(link).then(function(){ toast('Invite link copied'); }, function(){ toast(link); });
+  } else { toast(link); }
+}
+
+/* ---------------- Follow a few people (new accounts) ---------------- */
+async function openFollow5(){
+  try {
+    var q = await supa.from('profiles').select('id,username,display_name,avatar_url').neq('id', me.id)
+      .order('created_at', { ascending: false }).limit(12);
+    follow5People = q.data || [];
+  } catch(e){ follow5People = []; }
+  document.getElementById('follow5-overlay').classList.add('open');
+  renderFollow5();
+}
+function renderFollow5(){
+  var el = document.getElementById('follow5-list');
+  if(!el) return;
+  var n = follow5People.filter(function(p){ return myFollows.has(p.id); }).length;
+  el.innerHTML = follow5People.map(function(p){
+    var f = myFollows.has(p.id);
+    return '<div class="f5-row"><img src="' + avatarOf(p) + '">'
+      + '<div class="f5-name"><b>' + esc(p.username) + '</b><span>' + esc(p.display_name || '') + '</span></div>'
+      + '<button class="f5-btn' + (f ? ' following' : '') + '" onclick="toggleFollow(\'' + p.id + '\');setTimeout(renderFollow5,200)">' + (f ? 'Following' : 'Follow') + '</button>'
+      + '</div>';
+  }).join('') || '<div class="empty-note">No one else is here yet - invite a friend from Settings.</div>';
+  var c = document.getElementById('follow5-count');
+  if(c) c.textContent = n + ' of 5 followed';
+  var d = document.getElementById('follow5-done');
+  if(d) d.textContent = n >= 5 ? 'Start using Pulse' : (n > 0 ? 'Continue' : 'Skip for now');
+}
+function closeFollow5(){
+  try { localStorage.setItem('pulse-follow5-done', '1'); } catch(e){}
+  document.getElementById('follow5-overlay').classList.remove('open');
+}
+
 /* ---------------- Settings ---------------- */
 function renderSettings(){
   var darkOn = document.documentElement.classList.contains('dark');
@@ -2933,6 +3094,7 @@ function renderSettings(){
     book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3.5h12v17l-6-4-6 4Z"/></svg>',
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.4-3 8-7 9-4-1-7-4.6-7-9V6Z"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="1"/></svg>',
+    people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/><path d="M16.5 6.2a3.2 3.2 0 0 1 0 6.1"/><path d="M18 14.6c2 .6 3.5 2.2 3.5 4.9"/></svg>',
     out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13A1.5 1.5 0 0 1 18.5 20H15"/><path d="m10 8-4 4 4 4"/><path d="M6 12h9"/></svg>'
   };
   function row(icon, label, action, val, danger){
@@ -2957,6 +3119,7 @@ function renderSettings(){
     + '<div class="set-group">'
       + '<button class="set-row" onclick="toggleTheme();renderSettings()"><span class="ic">' + ic.moon + '</span><span class="lbl">Dark mode</span><span class="switch' + (darkOn ? ' on' : '') + '"><i></i></span></button>'
       + '<button class="set-row" onclick="settingsNotifications()"><span class="ic">' + ic.bell + '</span><span class="lbl">Push notifications</span><span class="val">' + (pushOn ? 'On' : 'Off') + '</span><span class="chev">›</span></button>'
+      + row(ic.people, 'Invite friends', 'openInvite()')
       + row(ic.down, 'Install app', 'installApp()')
       + row(ic.book, 'Saved posts', 'openSaved()')
     + '</div>'
@@ -3021,6 +3184,7 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('add-email-modal').classList.contains('open')) closeAddEmail();
   else if(document.getElementById('pw-modal').classList.contains('open')) closeChangePassword();
   else if(document.getElementById('about-modal').classList.contains('open')) closeAbout();
+  else if(document.getElementById('invite-modal').classList.contains('open')) closeInvite();
 });
 
 /* ---------------- Realtime ---------------- */
