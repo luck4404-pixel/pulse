@@ -128,7 +128,8 @@ let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
 let mediaUrlsReady = null;   // posts.media_urls column exists (multi-photo posts)
 let pendingChatFile = null;  // file staged via the paperclip — sent only when Send is tapped
-let msgMenuId = null;        // delete-menu open for this message id
+let msgMenuId = null;        // options-menu open for this message id
+let msgMenuMedia = null;     // media url of the message whose menu is open
 let msgMenuMine = false;
 let svILiked = false;       // do I like the current story item
 let svLikeCount = 0;
@@ -868,6 +869,7 @@ function renderPost(p){
         + '<button class="action-btn ' + (liked ? 'liked' : '') + '" onclick="likePost(\'' + p.id + '\')">' + (liked ? heartFilled : heartOutline) + '</button>'
         + '<button class="action-btn" onclick="focusComment(\'' + p.id + '\')">' + commentIcon + '</button>'
         + '<button class="action-btn" onclick="sharePost()">' + shareIcon + '</button>'
+        + '<button class="action-btn" onclick="downloadPost(\'' + p.id + '\')" title="Download">' + downloadIcon + '</button>'
       + '</div>'
       + '<button class="action-btn ' + (saved ? 'saved' : '') + '" onclick="savePost(\'' + p.id + '\')">' + (saved ? bookmarkFilled : bookmarkOutline) + '</button>'
     + '</div>'
@@ -1311,7 +1313,7 @@ function renderChat(){
         var mine = m.sender_id === me.id;
         return '<div class="msg-wrap ' + (mine ? 'me' : 'them') + '">'
           + '<div class="bubble ' + (mine ? 'me' : 'them') + '">' + renderMsgBody(m) + '</div>'
-          + (m.id ? '<button class="msg-del" title="Delete" onclick="openMsgMenu(\'' + m.id + '\')">&times;</button>' : '')
+          + (m.id ? '<button class="msg-del" title="More options" onclick="openMsgMenu(\'' + m.id + '\')">&#8943;</button>' : '')
         + '</div>';
       }).join('') : '<div class="empty-note">Say hi!</div>')
     + '</div>'
@@ -1333,6 +1335,7 @@ function renderChat(){
     + '<input type="file" id="chat-file-input" style="display:none" onchange="onChatFile()">'
     + (msgMenuId ? '<div class="modal-overlay open" id="msg-menu" style="z-index:350;" onclick="if(event.target===this)closeMsgMenu()">'
       + '<div class="modal" style="max-width:300px;"><div class="modal-body" style="display:flex;flex-direction:column;gap:10px;padding:18px 16px;">'
+        + (msgMenuMedia ? '<button class="share-btn" style="margin-top:0;background:#0095F6;" onclick="downloadMsgMedia(msgMenuId)">Download file</button>' : '')
         + '<div style="font-size:13.5px;color:var(--text-soft);text-align:center;">Delete this message?</div>'
         + (msgMenuMine ? '<button class="share-btn" style="margin-top:0;background:var(--like);" onclick="deleteMsgForEveryone(msgMenuId)">Delete for everyone</button>' : '')
         + '<button class="share-btn" style="margin-top:0;" onclick="deleteMsgForMe(msgMenuId)">Delete for me</button>'
@@ -1395,7 +1398,7 @@ function renderMsgBody(m){
     } else if(m.media_type === 'audio'){
       inner = '<audio class="msg-audio" src="' + esc(m.media_url) + '" controls preload="metadata"></audio>';
     } else {
-      inner = '<a class="msg-file" href="' + esc(m.media_url) + '" target="_blank" download><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>' + esc(m.media_name || 'Download file') + '</span></a>';
+      inner = '<a class="msg-file" href="' + esc(m.media_url) + '" target="_blank" onclick="event.preventDefault();downloadMedia(\'' + m.media_url + '\')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>' + esc(m.media_name || 'Download file') + '</span></a>';
     }
     return inner + (m.text ? '<div>' + esc(m.text) + '</div>' : '');
   }
@@ -1467,6 +1470,7 @@ function openMsgMenu(id){
   if(!m) return;
   msgMenuId = id;
   msgMenuMine = m.sender_id === me.id;
+  msgMenuMedia = m.media_url || null;
   renderChat();
 }
 function closeMsgMenu(){
@@ -2807,6 +2811,70 @@ async function logout(){
 function toggleTheme(){
   theme = theme === 'light' ? 'dark' : 'light';
   document.documentElement.classList.toggle('dark', theme === 'dark');
+}
+
+/* ---------------- Downloads ---------------- */
+function fileExt(url, fallback){
+  var m = String(url || '').split('?')[0].match(/\.([a-z0-9]{2,5})$/i);
+  return m ? m[1].toLowerCase() : (fallback || 'jpg');
+}
+function nameFromUrl(url){
+  try {
+    var last = decodeURIComponent(String(url || '').split('?')[0].split('/').pop() || '');
+    if(last && last.length <= 90) return last;
+  } catch(e){}
+  return 'pulse-' + Date.now() + '.' + fileExt(url, 'jpg');
+}
+async function downloadMedia(url, name){
+  if(!url){ toast('Nothing to download'); return; }
+  var fname = name || nameFromUrl(url);
+  try {
+    toast('Downloading...');
+    var res = await fetch(url, { mode: 'cors' });
+    if(!res.ok) throw new Error('http ' + res.status);
+    var blob = await res.blob();
+    var obj = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = obj;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(obj); }, 8000);
+    toast('Saved to your device');
+  } catch(e){
+    console.error('download failed', e);
+    try { window.open(url, '_blank'); } catch(e2){}
+    toast('Opened in a new tab - use your browser menu to save it');
+  }
+}
+function downloadPost(id){
+  var p = postIndex[id];
+  if(!p) return;
+  var list = (p.media && p.media.length ? p.media : [p.img]);
+  var url = list[0];
+  if(list.length > 1){
+    var track = document.querySelector('.post-media.carousel .car-track');
+    var idx = 0;
+    if(track){ var w = track.clientWidth || 1; idx = Math.round(track.scrollLeft / w); }
+    if(idx < 0 || idx >= list.length) idx = 0;
+    url = list[idx];
+  }
+  downloadMedia(url, 'pulse-post-' + Date.now() + '.' + fileExt(url, 'jpg'));
+}
+function downloadStoryItem(){
+  if(!svUser || !svUser.items || !svUser.items[svIndex]) return;
+  var url = svUser.items[svIndex].img;
+  downloadMedia(url, 'pulse-story-' + Date.now() + '.' + fileExt(url, 'jpg'));
+}
+function downloadMsgMedia(id){
+  var m = null;
+  for(var i=0;i<chatThread.length;i++){ if(chatThread[i].id === id){ m = chatThread[i]; break; } }
+  msgMenuId = null;
+  msgMenuMedia = null;
+  renderChat();
+  if(!m || !m.media_url){ toast('This message has no file'); return; }
+  downloadMedia(m.media_url);
 }
 
 /* ---------------- Settings ---------------- */

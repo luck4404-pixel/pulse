@@ -906,6 +906,9 @@
   <div class="sv-head">
     <div class="sv-user"><img id="sv-avatar" src=""><span id="sv-uname"></span><span class="t" id="sv-time"></span></div>
     <div style="display:flex;align-items:center;gap:14px;">
+      <button class="sv-close" onclick="downloadStoryItem()" title="Download">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v10"/><path d="m7.5 10 4.5 4.5L16.5 10"/><path d="M5 19h14"/></svg>
+      </button>
       <button class="sv-close" id="sv-delete" style="display:none;font-size:19px;" onclick="deleteStoryItem()" title="Delete">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
       </button>
@@ -1079,6 +1082,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>
