@@ -1821,17 +1821,32 @@ function getStoryUser(u){
   return s ? { u: u, uid: s.uid, avatar: s.avatar, items: s.items, mine: false } : { items: [] };
 }
 
-function openStoryViewer(u){
-  svUser = getStoryUser(u);
-  if(!svUser.items || svUser.items.length === 0) return;
-  svIndex = 0;
-  document.getElementById('story-viewer').classList.add('open');
+function svPaintHeader(){
+  if(!svUser) return;
   document.getElementById('sv-uname').textContent = svUser.u;
   document.getElementById('sv-avatar').src = avatarOf(svUser.mine ? me : svUser);
   document.getElementById('sv-delete').style.display = svUser.mine ? 'flex' : 'none';
   document.getElementById('sv-reply').value = '';
+}
+function svShowUser(u){
+  svUser = getStoryUser(u);
+  if(!svUser || !svUser.items || svUser.items.length === 0) return false;
+  svIndex = 0;
+  svPaintHeader();
   playStory();
+  return true;
+}
+function openStoryViewer(u){
+  document.getElementById('story-viewer').classList.add('open');
+  if(!svShowUser(u)){ closeStoryViewer(); return; }
   document.addEventListener('keydown', svKeyHandler);
+}
+// tray order, same order as the story rail (your own story is not included)
+function storyUserOrder(){
+  return Object.keys(storiesByUser).filter(function(u){
+    var s = storiesByUser[u];
+    return u !== me.username && s && s.items && s.items.length;
+  });
 }
 
 function svKeyHandler(e){
@@ -1883,11 +1898,32 @@ function playStory(){
 }
 
 function storyNext(){
-  if(svIndex < svUser.items.length - 1){ svIndex++; playStory(); }
-  else { markCurrentStorySeen(); closeStoryViewer(); }
+  if(!svUser || !svUser.items) { closeStoryViewer(); return; }
+  if(svIndex < svUser.items.length - 1){ svIndex++; playStory(); return; }
+  // finished this person's story: move on to the next person, like Instagram
+  markCurrentStorySeen();
+  var order = storyUserOrder();
+  if(!order.length){ closeStoryViewer(); return; }
+  var i = order.indexOf(svUser.u);
+  var next = (i === -1) ? order[0] : (i + 1 < order.length ? order[i + 1] : null);
+  if(next){ svShowUser(next); }
+  else { closeStoryViewer(); }
 }
 function storyPrev(){
-  if(svIndex > 0){ svIndex--; playStory(); }
+  if(!svUser || !svUser.items) return;
+  if(svIndex > 0){ svIndex--; playStory(); return; }
+  // step back into the previous person's last story
+  var order = storyUserOrder();
+  var i = order.indexOf(svUser.u);
+  if(i > 0){
+    var prev = getStoryUser(order[i - 1]);
+    if(prev && prev.items && prev.items.length){
+      svUser = prev;
+      svIndex = prev.items.length - 1;
+      svPaintHeader();
+      playStory();
+    }
+  }
 }
 function markCurrentStorySeen(){
   if(!svUser || !svUser.items || !svUser.items[svIndex]) return;
