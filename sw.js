@@ -1,5 +1,5 @@
 /* Pulse service worker — installable app + offline shell */
-var CACHE = 'pulse-cache-v1';
+var CACHE = 'pulse-cache-v2';
 
 self.addEventListener('install', function(e){
   e.waitUntil(
@@ -57,7 +57,7 @@ self.addEventListener('fetch', function(e){
                   url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js');
     if(isShell){
       e.respondWith(
-        fetch(e.request).then(function(res){ cachePut(e.request, res); return res; })
+        fetch(e.request, { cache: 'no-cache' }).then(function(res){ cachePut(e.request, res); return res; })
           .catch(function(){ return caches.match(e.request, { ignoreSearch: true }); })
       );
       return;
