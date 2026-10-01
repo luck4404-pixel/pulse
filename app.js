@@ -1547,8 +1547,7 @@ async function renderProfile(){
       + '<div>'
         + '<h2>' + esc(me.username)
           + ' <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button>'
-          + ' <button class="toggle-theme" onclick="toggleTheme()">Toggle theme</button>'
-          + ' <button class="logout-btn" onclick="logout()">Log out</button>'
+          + ' <button class="toggle-theme" onclick="showView(\'settings\')">⚙ Settings</button>'
           + (!myEmail ? ' <button class="toggle-theme" style="color:var(--accent-d);font-weight:600;" onclick="openAddEmail()">✉ Add email</button>' : '')
         + '</h2>'
         + '<div class="profile-stats">'
@@ -1663,6 +1662,7 @@ function renderSuggestions(){
 function showView(v){
   currentView = v;
   activeChat = null;
+  document.body.classList.toggle('view-settings', v === 'settings');
   const app = document.getElementById('app');
   app.classList.remove('full','wide');
   ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(function(id){
@@ -1675,6 +1675,7 @@ function showView(v){
   else if(v === 'messages'){ app.classList.add('wide'); renderMessages(); }
   else if(v === 'notifications'){ renderNotifications(); }
   else if(v === 'profile'){ renderProfile(); markNav('nav-profile'); }
+  else if(v === 'settings'){ renderSettings(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function markNav(id){
@@ -2808,6 +2809,95 @@ function toggleTheme(){
   document.documentElement.classList.toggle('dark', theme === 'dark');
 }
 
+/* ---------------- Settings ---------------- */
+function renderSettings(){
+  var darkOn = document.documentElement.classList.contains('dark');
+  var pushOn = ('Notification' in window) && Notification.permission === 'granted' && !!localStorage.getItem('pulse-push-on');
+  var emailVal = myEmail ? esc(myEmail) : 'Not set';
+  var ic = {
+    mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6 8.5-6"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>',
+    user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c0-3.6 3.1-5.8 7-5.8s7 2.2 7 5.8"/></svg>',
+    moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5Z"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg>',
+    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3.5h12v17l-6-4-6 4Z"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.4-3 8-7 9-4-1-7-4.6-7-9V6Z"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="1"/></svg>',
+    out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13A1.5 1.5 0 0 1 18.5 20H15"/><path d="m10 8-4 4 4 4"/><path d="M6 12h9"/></svg>'
+  };
+  function row(icon, label, action, val, danger){
+    return '<button class="set-row' + (danger ? ' danger' : '') + '" onclick="' + action + '">'
+      + '<span class="ic">' + icon + '</span><span class="lbl">' + label + '</span>'
+      + (val ? '<span class="val">' + val + '</span>' : '')
+      + '<span class="chev">›</span></button>';
+  }
+  document.getElementById('main-col').innerHTML =
+    '<div class="set-wrap">'
+    + '<div class="set-head">'
+      + '<button class="set-back" onclick="showView(\'profile\')" title="Back">'
+      + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></button>'
+      + '<h2>Settings</h2></div>'
+    + '<div class="set-title">Account</div>'
+    + '<div class="set-group">'
+      + row(ic.mail, (myEmail ? 'Email' : 'Add email'), 'openAddEmail()', emailVal)
+      + row(ic.lock, 'Change password', 'openChangePassword()')
+      + row(ic.user, 'Edit profile', 'openEditProfile()')
+    + '</div>'
+    + '<div class="set-title">App</div>'
+    + '<div class="set-group">'
+      + '<button class="set-row" onclick="toggleTheme();renderSettings()"><span class="ic">' + ic.moon + '</span><span class="lbl">Dark mode</span><span class="switch' + (darkOn ? ' on' : '') + '"><i></i></span></button>'
+      + '<button class="set-row" onclick="settingsNotifications()"><span class="ic">' + ic.bell + '</span><span class="lbl">Push notifications</span><span class="val">' + (pushOn ? 'On' : 'Off') + '</span><span class="chev">›</span></button>'
+      + row(ic.down, 'Install app', 'installApp()')
+      + row(ic.book, 'Saved posts', 'openSaved()')
+    + '</div>'
+    + '<div class="set-title">Privacy &amp; support</div>'
+    + '<div class="set-group">'
+      + row(ic.shield, 'Privacy policy', 'openPrivacy()')
+      + row(ic.info, 'About Pulse', 'openAbout()')
+    + '</div>'
+    + '<div class="set-group">' + row(ic.out, 'Log out', 'logout()', null, true) + '</div>'
+    + '</div>';
+}
+async function settingsNotifications(){
+  if(!('Notification' in window)){ toast('This browser does not support notifications'); return; }
+  if(Notification.permission === 'granted' && localStorage.getItem('pulse-push-on')){ toast('Notifications are already on'); return; }
+  await enableNotifications();
+  renderSettings();
+}
+function openSaved(){
+  profileTab = 'saved';
+  showView('profile');
+}
+function openChangePassword(){
+  if(!myEmail){ toast('Add an email to your account first'); openAddEmail(); return; }
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  document.getElementById('pw-modal').classList.add('open');
+}
+function closeChangePassword(){ document.getElementById('pw-modal').classList.remove('open'); }
+async function savePassword(){
+  var a = document.getElementById('pw-new').value || '';
+  var b = document.getElementById('pw-confirm').value || '';
+  if(a.length < 6){ toast('Password must be at least 6 characters'); return; }
+  if(a !== b){ toast('The two passwords do not match'); return; }
+  var btn = document.getElementById('pw-submit');
+  btn.disabled = true;
+  try {
+    var r = await supa.auth.updateUser({ password: a });
+    if(r.error){ toast(r.error.message || 'Could not change the password'); return; }
+    closeChangePassword();
+    toast('Password changed! Use it next time you log in');
+  } catch(e){
+    console.error(e);
+    toast('Something went wrong - please try again');
+  } finally {
+    btn.disabled = false;
+  }
+}
+function openAbout(){ document.getElementById('about-modal').classList.add('open'); }
+function closeAbout(){ document.getElementById('about-modal').classList.remove('open'); }
+
 /* ---------------- Global escape-to-close ---------------- */
 document.addEventListener('keydown', function(e){
   if(e.key !== 'Escape') return;
@@ -2820,6 +2910,8 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('privacy-modal').classList.contains('open')) closePrivacy();
   else if(document.getElementById('email-auth-modal').classList.contains('open')) closeEmailAuth();
   else if(document.getElementById('add-email-modal').classList.contains('open')) closeAddEmail();
+  else if(document.getElementById('pw-modal').classList.contains('open')) closeChangePassword();
+  else if(document.getElementById('about-modal').classList.contains('open')) closeAbout();
 });
 
 /* ---------------- Realtime ---------------- */
