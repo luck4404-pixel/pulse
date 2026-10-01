@@ -643,10 +643,9 @@
   }
   /* ---------- Phone layout (Instagram-style fixed screen) ---------- */
   @media (max-width:700px){
-    html,body{overflow-x:hidden;}
     body{
       padding-bottom:calc(64px + env(safe-area-inset-bottom));
-      overscroll-behavior-y:none;
+      overflow-x:clip;
       -webkit-tap-highlight-color:transparent;
     }
     /* compact top bar, safe under the notch */
