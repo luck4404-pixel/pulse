@@ -2867,6 +2867,11 @@ function downloadStoryItem(){
   var url = svUser.items[svIndex].img;
   downloadMedia(url, 'pulse-story-' + Date.now() + '.' + fileExt(url, 'jpg'));
 }
+function downloadViewerImage(){
+  var img = document.getElementById('img-viewer-img');
+  if(!img || !img.src) return;
+  downloadMedia(img.src, 'pulse-photo-' + Date.now() + '.' + fileExt(img.src, 'jpg'));
+}
 function downloadMsgMedia(id){
   var m = null;
   for(var i=0;i<chatThread.length;i++){ if(chatThread[i].id === id){ m = chatThread[i]; break; } }
