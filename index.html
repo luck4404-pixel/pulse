@@ -643,6 +643,17 @@
     .bottomnav{display:none;}
     body{padding-bottom:0;}
   }
+  /* ---------- Volume + multi-photo swiper in the full-screen viewer ---------- */
+  .music-chip .vol{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px;}
+  .music-chip .vol input{width:64px;height:18px;accent-color:#0095F6;}
+  .reel-music-chip .vol input{width:64px;height:18px;accent-color:#fff;}
+  .set-row input[type=range]{accent-color:#0095F6;}
+  .short-car{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:transparent;}
+  .short-car .car-track{width:100%;height:100%;align-items:center;}
+  .short-car .car-track img{flex:0 0 100%;width:100%;height:auto;max-height:100vh;object-fit:contain;margin:0;scroll-snap-align:start;}
+  .short-car .car-count{top:56px;left:14px;}
+  .short-car .car-dots{bottom:96px;}
+
   /* ---------- Tick marks (blue = verified, gold = Pro) ---------- */
   .tick{display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px;flex-shrink:0;}
   .tick svg{width:15px;height:15px;display:block;}
@@ -1059,7 +1070,7 @@
 </div>
 
 <!-- New user onboarding (official split-screen entry page) -->
-<div class="modal-overlay open" id="onboarding-overlay" style="z-index:400;">
+<div class="modal-overlay" id="onboarding-overlay" style="z-index:400;">
   <div class="auth-full">
     <div class="auth-hero">
       <div><svg viewBox="0 0 48 48" width="64" height="64" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F58529"/><stop offset="0.45" stop-color="#DD2A7B"/><stop offset="0.7" stop-color="#8134AF"/><stop offset="1" stop-color="#515BD4"/></linearGradient></defs><rect width="48" height="48" rx="10.5" fill="url(#lg2)"/><rect x="9.5" y="9.5" width="29" height="29" rx="7" fill="none" stroke="#fff" stroke-width="2.8"/><polyline points="14,24 19,24 22,17 25.5,31 28.5,20 30.5,24 34,24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -1201,6 +1212,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>

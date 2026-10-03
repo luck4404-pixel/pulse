@@ -153,6 +153,7 @@ let presenceChannel = null;
 /* ---------------- Auth & boot ---------------- */
 async function boot(){
   captureInvite(); // pick up ?invite=<username> and ?post=<id> before anything else
+  loadVolume();
   document.getElementById('main-col').innerHTML = '<div class="empty-note">Loading your feed…</div>';
   if(!supa){
     document.getElementById('main-col').innerHTML = '<div class="empty-note">This app is not connected to a backend yet.<br>The site owner needs to add the Supabase keys.</div>';
@@ -176,9 +177,11 @@ async function boot(){
       document.getElementById('onboarding-overlay').classList.remove('open');
       await afterLogin();
     } else {
+      // only NOW show the entry screen: showing it earlier made it flash
+      // for a second in front of a user who is already signed in
+      document.getElementById('onboarding-overlay').classList.add('open');
       populateEntryCollage();
     }
-    // the entry screen stays open when there is no profile yet
   } catch(e){
     console.error(e);
     document.getElementById('main-col').innerHTML =
@@ -886,9 +889,9 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-media' + (multi ? ' carousel' : '') + '" ondblclick="likePost(\'' + p.id + '\', true)">'
       + (multi
-        ? '<div class="car-track" onscroll="carScrolled(this)">'
+        ? '<div class="car-track" onscroll="carScrolled(this)" ontouchstart="carTouchStart(event)" ontouchmove="carTouchMove(event)" ontouchend="carTouchEnd()">'
           + mediaList.map(function(u){
-              return '<img src="' + u + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">';
+              return '<img src="' + u + '" loading="lazy" draggable="false" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">';
             }).join('')
           + '</div>'
           + '<button class="car-btn left" style="display:none" onclick="event.stopPropagation();carGo(this,-1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
@@ -914,7 +917,7 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-likes">' + p.likes.length.toLocaleString() + ' like' + (p.likes.length === 1 ? '' : 's') + '</div>'
     + '<div class="post-caption"><span class="cap-uname" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">' + esc(p.user) + '</span>' + esc(p.caption) + '</div>'
-    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
+    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span><span class="vol" onclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></span></div>' : '')
     + (p.comments.length ? (
         (!showAll && p.comments.length > 2 ? '<button class="post-comments-link" onclick="expandComments(\'' + p.id + '\')">View all ' + p.comments.length + ' comments</button>' : '')
         + '<div class="post-comment-list">'
@@ -966,6 +969,41 @@ function carScrolled(trackEl){
 /* ---------------- Audio playback (one song at a time) ---------------- */
 let currentAudio = null;
 let playingAudioPostId = null;
+/* keeps a horizontal photo swipe from being treated as a tap (which would
+   otherwise open the full-screen viewer in the middle of the swipe) */
+var carSwipeMoved = false, carSwipeX = 0, carSwipeY = 0;
+function carTouchStart(e){
+  var t = e.touches && e.touches[0]; if(!t) return;
+  carSwipeMoved = false; carSwipeX = t.clientX; carSwipeY = t.clientY;
+}
+function carTouchMove(e){
+  var t = e.touches && e.touches[0]; if(!t) return;
+  var dx = Math.abs(t.clientX - carSwipeX), dy = Math.abs(t.clientY - carSwipeY);
+  if(dx > 8 && dx > dy) carSwipeMoved = true;
+}
+function carTouchEnd(){ setTimeout(function(){ carSwipeMoved = false; }, 350); }
+
+/* ---------------- Sound volume ---------------- */
+var audioVolume = 1;
+function loadVolume(){
+  try {
+    var v = parseFloat(localStorage.getItem('pulse-volume'));
+    if(!isNaN(v)) audioVolume = Math.max(0, Math.min(1, v));
+  } catch(e){}
+}
+function applyVol(a){ try { if(a) a.volume = audioVolume; } catch(e){} return a; }
+function setVolume(v){
+  audioVolume = Math.max(0, Math.min(1, Number(v) || 0));
+  try { localStorage.setItem('pulse-volume', String(audioVolume)); } catch(e){}
+  applyVol(currentAudio);
+  applyVol(svAudio);
+  applyVol(previewAudio);
+  var pct = Math.round(audioVolume * 100);
+  var lbl = document.getElementById('vol-label'); if(lbl) lbl.textContent = pct + '%';
+  var sl = document.getElementById('vol-slider'); if(sl && Number(sl.value) !== pct) sl.value = pct;
+  var chips = document.querySelectorAll('.music-chip .vol input, .reel-music-chip .vol input');
+  for(var i=0;i<chips.length;i++){ if(Number(chips[i].value) !== pct) chips[i].value = pct; }
+}
 function stopAudio(){
   if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
   playingAudioPostId = null;
@@ -977,7 +1015,7 @@ function togglePostAudio(id){
   if(!p || !p.audio) return;
   if(playingAudioPostId === id){ stopAudio(); return; }
   stopAudio();
-  try { currentAudio = new Audio(p.audio); }
+  try { currentAudio = applyVol(new Audio(p.audio)); }
   catch(e){ toast('Could not play this audio'); return; }
   currentAudio.onended = stopAudio;
   currentAudio.onerror = function(){ toast('Could not play this audio'); stopAudio(); };
@@ -1121,6 +1159,7 @@ var imgTapTimer = null;
 var shortsObserver = null;
 var activeShortId = null;
 function imgTap(id){
+  if(carSwipeMoved) return; // that was a swipe, not a tap
   if(imgTapTimer){ clearTimeout(imgTapTimer); imgTapTimer = null; return; }
   imgTapTimer = setTimeout(function(){ imgTapTimer = null; openShorts(id); }, 260);
 }
@@ -1174,7 +1213,7 @@ function renderShortSlide(p){
   return '<div class="short-slide" data-post="' + p.id + '">'
     + '<img class="short-bg" src="' + p.img + '" alt="">'
     + (p.audio ? '<button class="short-song" id="sr-' + p.id + '" title="Play or pause song" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
-    + '<img class="short-img" src="' + p.img + '" ondblclick="shortLike(\'' + p.id + '\', true)">'
+    + shortMediaHtml(p)
     + '<div class="short-overlay-bottom">'
       + '<div class="u" style="cursor:pointer" onclick="closeShorts();viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
       + (p.caption ? '<div class="cap">' + esc(p.caption) + '</div>' : '')
@@ -1187,6 +1226,27 @@ function renderShortSlide(p){
       + '<button onclick="sharePost()">' + shareIcon + '<span>Share</span></button>'
     + '</div>'
   + '</div>';
+}
+
+/* multi-photo posts get a left/right swiper inside the full-screen viewer */
+function shortMediaHtml(p){
+  var media = (p.media && p.media.length ? p.media : [p.img]);
+  if(media.length < 2){
+    return '<img class="short-img" src="' + p.img + '" alt="" ondblclick="shortLike(\'' + p.id + '\', true)">';
+  }
+  return '<div class="post-media carousel short-car">'
+    + '<div class="car-track" onscroll="carScrolled(this)" ontouchstart="carTouchStart(event)" ontouchmove="carTouchMove(event)" ontouchend="carTouchEnd()">'
+    + media.map(function(u){
+        return '<img src="' + u + '" alt="" draggable="false" ondblclick="shortLike(\'' + p.id + '\', true)">';
+      }).join('')
+    + '</div>'
+    + '<button class="car-btn left" style="display:none" onclick="event.stopPropagation();carGo(this,-1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    + '<button class="car-btn right" onclick="event.stopPropagation();carGo(this,1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 6 15 12 9 18"/></svg></button>'
+    + '<div class="car-count">1/' + media.length + '</div>'
+    + '<div class="car-dots">' + media.map(function(_, mi){
+        return '<button class="car-dot' + (mi === 0 ? ' on' : '') + '" onclick="event.stopPropagation();carDot(this,' + mi + ')" ondblclick="event.stopPropagation()"></button>';
+      }).join('') + '</div>'
+    + '</div>';
 }
 
 function shortsActive(id){
@@ -1939,7 +1999,7 @@ function playStory(){
       sticker.querySelector('.mtitle').textContent = (item.audioTitle || 'audio') + (item.audioArtist ? ' · ' + item.audioArtist : '');
     }
     try {
-      svAudio = new Audio(item.audio);
+      svAudio = applyVol(new Audio(item.audio));
       svAudio.play().then(function(){
         if(item.audioStart > 0){ try{ svAudio.currentTime = item.audioStart; }catch(e){} }
         if(sticker) sticker.classList.add('playing');
@@ -2657,7 +2717,7 @@ function toggleSongPreview(key){
   stopPreview();
   previewingKey = String(key);
   try {
-    previewAudio = new Audio(song.audio_url);
+    previewAudio = applyVol(new Audio(song.audio_url));
     previewAudio.onended = stopPreview;
     previewAudio.onerror = stopPreview;
     previewAudio.play().catch(stopPreview);
@@ -2708,7 +2768,7 @@ function previewFromStart(){
   if(!pendingSong || !pendingSong.url) return;
   stopPreview();
   try {
-    previewAudio = new Audio(pendingSong.url);
+    previewAudio = applyVol(new Audio(pendingSong.url));
     previewAudio.onended = stopPreview;
     previewAudio.onerror = stopPreview;
     previewAudio.play().then(function(){
@@ -3457,6 +3517,7 @@ function renderSettings(){
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.4-3 8-7 9-4-1-7-4.6-7-9V6Z"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="1"/></svg>',
     star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8Z"/></svg>',
+    volume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
     people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/><path d="M16.5 6.2a3.2 3.2 0 0 1 0 6.1"/><path d="M18 14.6c2 .6 3.5 2.2 3.5 4.9"/></svg>',
     out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13A1.5 1.5 0 0 1 18.5 20H15"/><path d="m10 8-4 4 4 4"/><path d="M6 12h9"/></svg>'
   };
@@ -3483,6 +3544,7 @@ function renderSettings(){
     + '<div class="set-group">'
       + '<button class="set-row" onclick="toggleTheme();renderSettings()"><span class="ic">' + ic.moon + '</span><span class="lbl">Dark mode</span><span class="switch' + (darkOn ? ' on' : '') + '"><i></i></span></button>'
       + '<button class="set-row" onclick="settingsNotifications()"><span class="ic">' + ic.bell + '</span><span class="lbl">Push notifications</span><span class="val">' + (pushOn ? 'On' : 'Off') + '</span><span class="chev">›</span></button>'
+      + '<div class="set-row" style="cursor:default;"><span class="ic">' + ic.volume + '</span><span class="lbl">Sound volume</span><span class="val" id="vol-label">' + Math.round(audioVolume * 100) + '%</span><input id="vol-slider" type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" style="width:92px;margin-left:8px;flex-shrink:0;"></div>'
       + row(ic.people, 'Invite friends', 'openInvite()')
       + row(ic.down, 'Install app', 'installApp()')
       + row(ic.book, 'Saved posts', 'openSaved()')
