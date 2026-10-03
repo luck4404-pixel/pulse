@@ -128,6 +128,7 @@ let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
 let mediaUrlsReady = null;   // posts.media_urls column exists (multi-photo posts)
 let storyTextReady = null;   // stories.text_overlays column exists (text on stories)
+let badgesReady = null;      // profiles.badge + profiles.is_pro exist (ticks)
 var storyTexts = [];         // text items on the story being composed
 var stSel = -1;              // which text item is selected in the composer
 let pendingChatFile = null;  // file staged via the paperclip — sent only when Send is tapped
@@ -198,9 +199,9 @@ async function afterLogin(){
   }
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
-    const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady].join(',');
+    const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
     runProbes().then(function(){
-      const probeAfter = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady].join(',');
+      const probeAfter = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
       if(probeBefore !== probeAfter) scheduleRefresh();
     });
   } else {
@@ -529,6 +530,9 @@ function storyTextField(){
   if(!storyTextReady) return '';
   return ',text_overlays';
 }
+function profileExtra(){
+  return badgesReady ? ',badge,is_pro' : '';
+}
 
 async function checkSongTable(){
   try {
@@ -542,6 +546,12 @@ async function checkMusicStart(){
     const q = await supa.from('posts').select('audio_start').limit(1);
     musicStartReady = !q.error;
   } catch(e){ musicStartReady = false; }
+}
+async function checkBadges(){
+  try {
+    const q = await supa.from('profiles').select('badge,is_pro').limit(1);
+    badgesReady = !q.error;
+  } catch(e){ badgesReady = false; }
 }
 async function checkStoryText(){
   try {
@@ -578,7 +588,7 @@ async function checkMediaMsgV2(){
 async function runProbes(){
   await Promise.all([
     checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMediaUrls(),
-    checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2(), checkStoryText()
+    checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2(), checkStoryText(), checkBadges()
   ]);
   saveProbeCache();
 }
@@ -595,6 +605,7 @@ function loadProbeCache(){
     mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
     mediaUrlsReady = probeCache.mediaUrlsReady;
     storyTextReady = probeCache.storyTextReady;
+    badgesReady = probeCache.badgesReady;
   }
 }
 function saveProbeCache(){
@@ -604,7 +615,8 @@ function saveProbeCache(){
       musicStartReady: musicStartReady, storyLikesReady: storyLikesReady,
       mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready,
       mediaUrlsReady: mediaUrlsReady,
-      storyTextReady: storyTextReady
+      storyTextReady: storyTextReady,
+      badgesReady: badgesReady
     }));
   } catch(e){}
 }
@@ -630,6 +642,8 @@ function mapPost(p){
     uid: p.user_id,
     user: (p.profiles && p.profiles.username) || 'user',
     avatar: p.profiles ? p.profiles.avatar_url : null,
+    badge: (p.profiles && p.profiles.badge) || null,
+    is_pro: p.profiles ? !!p.profiles.is_pro : null,
     img: p.image_url,
     media: (p.media_urls && p.media_urls.length ? p.media_urls : [p.image_url]),
     caption: p.caption || '',
@@ -651,7 +665,7 @@ function mapPost(p){
 
 async function fetchFeed(limit){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
     .order('created_at', { ascending: false })
     .limit(limit || 40);
   if(q.error){ console.error(q.error); return []; }
@@ -675,7 +689,7 @@ function rankExplore(list){
 
 async function fetchExplorePool(){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)')
+    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(200);
   if(q.error){ console.error(q.error); return []; }
@@ -684,7 +698,7 @@ async function fetchExplorePool(){
 
 async function fetchSavedPosts(){
   const q = await supa.from('saved')
-    .select('posts(id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id))')
+    .select('posts(id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id))')
     .eq('user_id', me.id);
   if(q.error){ console.error(q.error); return []; }
   return (q.data || []).map(function(r){ return r.posts ? mapPost(r.posts) : null; }).filter(Boolean);
@@ -864,7 +878,7 @@ function renderPost(p){
       + '<div class="post-user" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">'
         + '<img src="' + avatarOf(p) + '">'
         + '<div class="names">'
-          + '<span class="uname">' + esc(p.user) + (p.uid === me.id ? proChip() : '') + '</span>'
+          + '<span class="uname">' + esc(p.user) + tickFor(p, p.uid === me.id) + '</span>'
           + (presenceMap.has(p.uid) ? '<span class="loc" style="color:#22c55e;">Active now</span>' : '')
         + '</div>'
       + '</div>'
@@ -1575,7 +1589,7 @@ async function renderProfile(){
     '<div class="profile-header">'
       + '<img class="pfp" src="' + avatarOf(me) + '">'
       + '<div>'
-        + '<h2>' + esc(me.username) + proChip()
+        + '<h2>' + esc(me.username) + tickFor(me, true)
           + ' <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button>'
           + ' <button class="toggle-theme" onclick="showView(\'settings\')">⚙ Settings</button>'
           + (!myEmail ? ' <button class="toggle-theme" style="color:var(--accent-d);font-weight:600;" onclick="openAddEmail()">✉ Add email</button>' : '')
@@ -1633,7 +1647,7 @@ async function renderOtherProfile(username){
   }
   const prof = q.data;
   const results = await Promise.all([
-    supa.from('posts').select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
+    supa.from('posts').select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
     countRows('posts', 'user_id', prof.id),
     countRows('follows', 'following_id', prof.id),
     countRows('follows', 'follower_id', prof.id)
@@ -1644,14 +1658,15 @@ async function renderOtherProfile(username){
   document.getElementById('main-col').innerHTML =
     '<div style="display:flex;align-items:center;gap:14px;padding:14px 4px;">'
       + '<button onclick="backFromProfile()" style="background:none;border:none;color:var(--text);"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>'
-      + '<span style="font-weight:600;font-size:15px;">' + esc(prof.username) + '</span>'
+      + '<span style="font-weight:600;font-size:15px;">' + esc(prof.username) + tickFor(prof, false) + '</span>'
     + '</div>'
     + '<div class="profile-header">'
       + '<span class="av-wrap"><img class="pfp" src="' + avatarOf(prof) + '"><span class="presence-dot" data-uid="' + prof.id + '"></span></span>'
       + '<div>'
-        + '<h2>' + esc(prof.username)
+        + '<h2>' + esc(prof.username) + tickFor(prof, false)
           + ' <button class="primary-btn" id="follow-btn-' + prof.id + '" onclick="toggleFollow(\'' + prof.id + '\')">' + (iFollow ? 'Following' : 'Follow') + '</button>'
           + ' <button class="toggle-theme" onclick="messageUser(\'' + prof.id + '\')">Message</button>'
+          + (me.is_admin ? ' <button class="toggle-theme" style="color:#0095F6;font-weight:600;" onclick="toggleBlueTick(\'' + prof.id + '\',\'' + prof.username + '\',' + (prof.badge === 'blue' ? 'true' : 'false') + ')">' + (prof.badge === 'blue' ? 'Remove blue tick' : 'Give blue tick') + '</button>' : '')
         + '</h2>'
         + '<div class="profile-stats">'
           + '<span><b>' + postCount + '</b> posts</span>'
@@ -1786,7 +1801,7 @@ async function openPostFromUrl(id){
   if(!me || !id) return;
   if(!postIndex[id]){
     var q = await supa.from('posts')
-      .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+      .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
       .eq('id', id).maybeSingle();
     if(q.error || !q.data) return;
     posts.unshift(mapPost(q.data));
@@ -3137,7 +3152,37 @@ function proUntilText(){
   try { return 'Active until ' + new Date(proInfo.current_period_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
   catch(e){ return 'Active'; }
 }
-function proChip(){ return isPro() ? '<span class="pro-chip">PRO</span>' : ''; }
+function tickHtml(level){
+  var fill = level === 'blue' ? '#0095F6' : '#E0A32E';
+  var label = level === 'blue' ? 'Verified' : 'Pulse Pro';
+  return '<span class="tick" title="' + label + '" aria-label="' + label + '">'
+    + '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="' + fill + '"/>'
+    + '<path d="m7.6 12.3 3 3 5.8-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '</span>';
+}
+/* blue tick = given by the owner by hand;  gold tick = a Pro subscriber */
+function tickFor(profile, mine){
+  if(!profile) return '';
+  if(profile.badge === 'blue') return tickHtml('blue');
+  var pro = mine ? isPro() : !!profile.is_pro;
+  return pro ? tickHtml('gold') : '';
+}
+async function toggleBlueTick(uid, username, hasBlue){
+  if(!me || !me.is_admin){ toast('Only the owner can give the blue tick'); return; }
+  try {
+    var r = await supa.rpc('set_blue_tick', { target: uid, give: !hasBlue });
+    if(r.error){
+      console.error(r.error);
+      toast('Could not update the tick - run badges.sql in Supabase first');
+      return;
+    }
+    toast(!hasBlue ? 'Blue tick given to @' + username : 'Blue tick removed from @' + username);
+    renderOtherProfile(username);
+  } catch(e){
+    console.error(e);
+    toast('Could not update the tick');
+  }
+}
 function proPick(k){ proPlanChosen = k; renderPro(); }
 function proRenew(){ toast('Your plan runs out at the end of the period — pay again to extend it'); }
 function proBenefit(title, sub){
