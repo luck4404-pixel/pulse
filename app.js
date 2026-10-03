@@ -1194,13 +1194,16 @@ function renderExploreGrid(){
 function openPostModal(id){
   const p = postIndex[id];
   if(!p) return;
+  stopAudio();                                  // never let the previous post's song keep playing
   postModalOpenId = id;
   document.getElementById('post-modal-content').innerHTML = renderPost(p);
   document.getElementById('post-modal').classList.add('open');
+  if(p.audio) togglePostAudio(id);              // the song starts by itself, like in the viewer
 }
 function closePostModal(){
   postModalOpenId = null;
   document.getElementById('post-modal').classList.remove('open');
+  stopAudio();                                  // and it stops when the post is closed
 }
 
 /* ---------------- Full-screen photo viewer ---------------- */
@@ -1764,6 +1767,7 @@ async function renderOtherProfile(username){
     countRows('follows', 'follower_id', prof.id)
   ]);
   const theirPosts = (results[0].data || []).map(mapPost);
+  theirPosts.forEach(function(x){ postIndex[x.id] = x; });   // so tapping one can open it
   const postCount = results[1], followers = results[2], following = results[3];
   const iFollow = myFollows.has(prof.id);
   document.getElementById('main-col').innerHTML =
