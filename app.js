@@ -668,10 +668,15 @@ function mapPost(p){
 
 async function fetchFeed(limit){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + '),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
     .order('created_at', { ascending: false })
     .limit(limit || 40);
-  if(q.error){ console.error(q.error); return []; }
+  if(q.error){
+    console.error('feed query failed', q.error);
+    postsError = q.error.message || 'the posts query failed';
+    return [];
+  }
+  postsError = null;
   return q.data.map(mapPost);
 }
 
@@ -692,16 +697,20 @@ function rankExplore(list){
 
 async function fetchExplorePool(){
   const q = await supa.from('posts')
-    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id)')
+    .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + '),likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(200);
-  if(q.error){ console.error(q.error); return []; }
+  if(q.error){
+    console.error('explore query failed', q.error);
+    postsError = q.error.message || 'the posts query failed';
+    return [];
+  }
   return rankExplore(q.data.map(mapPost));
 }
 
 async function fetchSavedPosts(){
   const q = await supa.from('saved')
-    .select('posts(id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id))')
+    .select('posts(id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + '),likes(user_id))')
     .eq('user_id', me.id);
   if(q.error){ console.error(q.error); return []; }
   return (q.data || []).map(function(r){ return r.posts ? mapPost(r.posts) : null; }).filter(Boolean);
@@ -1036,8 +1045,9 @@ function togglePostAudio(id){
 }
 
 var lastFeedSig = null;
+var postsError = null;   // set when the posts query itself failed (so we never show a fake 'no posts')
 function feedSignature(){
-  var s = (me ? me.username : '') + '|' + mySaved.size + '|';
+  var s = (me ? me.username : '') + '|' + mySaved.size + '|' + (postsError || '') + '|';
   s += (posts || []).map(function(p){
     return p.id + ':' + p.user + ':' + (p.likes ? p.likes.length : 0) + ':' + (p.comments ? p.comments.length : 0) + ':' + (p.badge || '') + ':' + (p.is_pro ? 1 : 0);
   }).join(',');
@@ -1059,7 +1069,9 @@ function renderFeed(force){
   col.innerHTML =
     renderStories() + (posts.length ? posts.map(renderPost).join('') :
     (feedLoaded
-      ? '<div class="empty-note">No posts yet.<br>Be the first — tap the + button!</div>'
+      ? (postsError
+          ? '<div class="empty-note">Could not load posts.<br><span style="font-size:11.5px;color:var(--text-soft);">' + esc(String(postsError).slice(0, 140)) + '</span><br><br>Open Settings, then reload the app.</div>'
+          : '<div class="empty-note">No posts yet.<br>Be the first — tap the + button!</div>')
       : '<div class="empty-note">Loading your feed…</div>'));
 }
 
@@ -1689,7 +1701,7 @@ async function renderProfile(){
     + '<div class="grid">'
     + (shown.length ? shown.map(function(p){
         return '<div class="cell" onclick="openPostModal(\'' + p.id + '\')"><img src="' + p.img + '" loading="lazy">' + (p.audio ? '<div class="cell-music-badge">♪</div>' : '') + multiBadge(p) + '</div>';
-      }).join('') : '<div class="empty-note" style="grid-column:1/-1;">' + (profileTab === 'posts' ? 'No posts yet.' : 'Nothing saved yet.') + '</div>')
+      }).join('') : '<div class="empty-note" style="grid-column:1/-1;">' + (profileTab === 'posts' ? (postsError ? 'Could not load your posts.' : 'No posts yet.') : 'Nothing saved yet.') + '</div>')
     + '</div>';
 }
 function setProfileTab(t){ profileTab = t; renderProfile(); }
@@ -1727,7 +1739,7 @@ async function renderOtherProfile(username){
   }
   const prof = q.data;
   const results = await Promise.all([
-    supa.from('posts').select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
+    supa.from('posts').select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + '),likes(user_id)').eq('user_id', prof.id).order('created_at', { ascending: false }).limit(60),
     countRows('posts', 'user_id', prof.id),
     countRows('follows', 'following_id', prof.id),
     countRows('follows', 'follower_id', prof.id)
@@ -1881,7 +1893,7 @@ async function openPostFromUrl(id){
   if(!me || !id) return;
   if(!postIndex[id]){
     var q = await supa.from('posts')
-      .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + ',likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
+      .select('id,user_id,image_url,caption,created_at' + mediaField() + audioFields() + ',profiles!posts_user_id_fkey(id,username,avatar_url' + profileExtra() + '),likes(user_id),comments(id,user_id,text,created_at,profiles!comments_user_id_fkey(id,username,avatar_url))')
       .eq('id', id).maybeSingle();
     if(q.error || !q.data) return;
     posts.unshift(mapPost(q.data));
