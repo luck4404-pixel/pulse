@@ -912,6 +912,7 @@ function renderPost(p){
             }).join('')
           + '</div>'
         : '<img src="' + p.img + '" loading="lazy" decoding="async" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">')
+      + (p.audio ? '<div class="post-vol" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></div>' : '')
       + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
@@ -926,7 +927,7 @@ function renderPost(p){
     + '</div>'
     + '<div class="post-likes">' + p.likes.length.toLocaleString() + ' like' + (p.likes.length === 1 ? '' : 's') + '</div>'
     + '<div class="post-caption"><span class="cap-uname" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">' + esc(p.user) + '</span>' + esc(p.caption) + '</div>'
-    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span><span class="vol" onclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></span></div>' : '')
+    + (p.audio ? '<div class="music-chip" id="mc-' + p.id + '" data-post="' + p.id + '"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
     + (p.comments.length ? (
         (!showAll && p.comments.length > 2 ? '<button class="post-comments-link" onclick="expandComments(\'' + p.id + '\')">View all ' + p.comments.length + ' comments</button>' : '')
         + '<div class="post-comment-list">'
@@ -1010,7 +1011,7 @@ function setVolume(v){
   var pct = Math.round(audioVolume * 100);
   var lbl = document.getElementById('vol-label'); if(lbl) lbl.textContent = pct + '%';
   var sl = document.getElementById('vol-slider'); if(sl && Number(sl.value) !== pct) sl.value = pct;
-  var chips = document.querySelectorAll('.music-chip .vol input, .reel-music-chip .vol input');
+  var chips = document.querySelectorAll('.post-vol input, .short-vol input');
   for(var i=0;i<chips.length;i++){ if(Number(chips[i].value) !== pct) chips[i].value = pct; }
 }
 function stopAudio(){
@@ -1244,6 +1245,7 @@ function renderShortSlide(p){
   const liked = p.likes.indexOf(me.id) !== -1;
   return '<div class="short-slide" data-post="' + p.id + '">'
     + '<img class="short-bg" src="' + p.img + '" alt="">'
+    + (p.audio ? '<div class="short-vol" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></div>' : '')
     + (p.audio ? '<button class="short-song" id="sr-' + p.id + '" title="Play or pause song" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
     + shortMediaHtml(p)
     + '<div class="short-overlay-bottom">'
@@ -1355,6 +1357,7 @@ function renderReels(){
         const liked = p.likes.indexOf(me.id) !== -1;
         return '<div class="reel">'
           + '<img src="' + p.img + '" loading="lazy">'
+          + (p.audio ? '<div class="post-vol" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></div>' : '')
           + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
           + '<div class="reel-overlay-bottom">'
             + '<div class="u" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
