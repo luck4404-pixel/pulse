@@ -135,6 +135,8 @@ let msgMenuId = null;        // options-menu open for this message id
 let msgMenuMedia = null;     // media url of the message whose menu is open
 let pendingPostId = null;    // ?post=<id> link waiting to be opened
 var follow5People = [];      // people shown on the follow-a-few screen
+var proInfo = null;          // this account's subscription row (null = not loaded / no plan)
+var proPlanChosen = 'pro_monthly';  // plan selected on the Pulse Pro screen
 let msgMenuMine = false;
 let svILiked = false;       // do I like the current story item
 let svLikeCount = 0;
@@ -204,7 +206,7 @@ async function afterLogin(){
   } else {
     await runProbes(); // first visit: one parallel round of probes
   }
-  await Promise.all([loadFollows(), loadSavedIds()]);
+  await Promise.all([loadFollows(), loadSavedIds(), loadPro()]);
   loadSuggestions(); // side column — never blocks the feed
   await refreshData();
   setupRealtime();
@@ -489,7 +491,8 @@ function agreePrivacy(){
 
 /* ---------------- Storage upload ---------------- */
 async function uploadImage(file, maxDim){
-  file = await compressImage(file, maxDim || 1440, 0.82);
+  var proUser = (typeof isPro === 'function') && isPro();
+  file = await compressImage(file, maxDim || (proUser ? 2560 : 1440), proUser ? 0.92 : 0.82);
   const safeName = (file && file.name ? file.name : 'photo').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'photo';
   const path = me.id + '/' + Date.now() + '_' + safeName;
   const up = await supa.storage.from('media').upload(path, file);
@@ -861,7 +864,7 @@ function renderPost(p){
       + '<div class="post-user" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">'
         + '<img src="' + avatarOf(p) + '">'
         + '<div class="names">'
-          + '<span class="uname">' + esc(p.user) + '</span>'
+          + '<span class="uname">' + esc(p.user) + (p.uid === me.id ? proChip() : '') + '</span>'
           + (presenceMap.has(p.uid) ? '<span class="loc" style="color:#22c55e;">Active now</span>' : '')
         + '</div>'
       + '</div>'
@@ -1572,7 +1575,7 @@ async function renderProfile(){
     '<div class="profile-header">'
       + '<img class="pfp" src="' + avatarOf(me) + '">'
       + '<div>'
-        + '<h2>' + esc(me.username)
+        + '<h2>' + esc(me.username) + proChip()
           + ' <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button>'
           + ' <button class="toggle-theme" onclick="showView(\'settings\')">⚙ Settings</button>'
           + (!myEmail ? ' <button class="toggle-theme" style="color:var(--accent-d);font-weight:600;" onclick="openAddEmail()">✉ Add email</button>' : '')
@@ -1689,7 +1692,7 @@ function renderSuggestions(){
 function showView(v){
   currentView = v;
   activeChat = null;
-  document.body.classList.toggle('view-settings', v === 'settings');
+  document.body.classList.toggle('view-settings', v === 'settings' || v === 'pro');
   const app = document.getElementById('app');
   app.classList.remove('full','wide');
   ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(function(id){
@@ -1703,6 +1706,7 @@ function showView(v){
   else if(v === 'notifications'){ renderNotifications(); }
   else if(v === 'profile'){ renderProfile(); markNav('nav-profile'); }
   else if(v === 'settings'){ renderSettings(); }
+  else if(v === 'pro'){ renderPro(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function markNav(id){
@@ -3111,6 +3115,133 @@ function closeFollow5(){
   document.getElementById('follow5-overlay').classList.remove('open');
 }
 
+/* ---------------- Pulse Pro (subscriptions) ---------------- */
+var PAY_FN = 'https://mvbojueciwemmjohxvyh.supabase.co/functions/v1/pay';
+var razorpayLoaded = false;
+var PRO_PLANS = [
+  { k: 'pro_monthly', price: '₹99',  note: 'per month' },
+  { k: 'pro_yearly',  price: '₹799', note: 'per year · save 33%', best: true }
+];
+async function loadPro(){
+  try {
+    var q = await supa.from('subscriptions').select('plan,status,current_period_end').eq('user_id', me.id).maybeSingle();
+    proInfo = q.error ? null : (q.data || null);
+  } catch(e){ proInfo = null; }
+}
+function isPro(){
+  if(!proInfo || proInfo.status !== 'active' || !proInfo.current_period_end) return false;
+  return new Date(proInfo.current_period_end).getTime() > Date.now();
+}
+function proUntilText(){
+  if(!isPro()) return '';
+  try { return 'Active until ' + new Date(proInfo.current_period_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
+  catch(e){ return 'Active'; }
+}
+function proChip(){ return isPro() ? '<span class="pro-chip">PRO</span>' : ''; }
+function proPick(k){ proPlanChosen = k; renderPro(); }
+function proRenew(){ toast('Your plan runs out at the end of the period — pay again to extend it'); }
+function proBenefit(title, sub){
+  return '<div class="pro-benefit"><span class="pro-tick">✓</span><div><b>' + title + '</b><span>' + sub + '</span></div></div>';
+}
+function renderPro(){
+  var active = isPro();
+  document.getElementById('main-col').innerHTML =
+    '<div class="set-wrap">'
+    + '<div class="set-head">'
+      + '<button class="set-back" onclick="showView(\'settings\')" title="Back">'
+      + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></button>'
+      + '<h2>Pulse Pro</h2></div>'
+    + '<div class="pro-hero">'
+      + '<div class="pro-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8Z"/></svg></div>'
+      + '<h3>Pulse Pro</h3>'
+      + '<p>' + (active ? proUntilText() : 'Support Pulse and unlock a few extras.') + '</p>'
+    + '</div>'
+    + '<div class="set-title">What you get</div>'
+    + '<div class="set-group">'
+      + proBenefit('PRO badge next to your name', 'Shows on your profile and on your posts')
+      + proBenefit('HD photo uploads', 'Your photos are kept much sharper instead of being shrunk')
+      + proBenefit('Early access to new features', 'Try new tools before everyone else')
+      + proBenefit('You keep Pulse alive', 'Your support pays for the servers')
+    + '</div>'
+    + (active ? '' : '<div class="set-title">Choose a plan</div>')
+    + (active ? '' : '<div class="pro-plans">' + PRO_PLANS.map(function(p){
+        return '<button class="pro-plan' + (p.best ? ' best' : '') + (proPlanChosen === p.k ? ' on' : '') + '" onclick="proPick(\'' + p.k + '\')">'
+          + (p.best ? '<span class="pro-tag">BEST VALUE</span>' : '')
+          + '<span class="pro-price">' + p.price + '</span>'
+          + '<span class="pro-note">' + p.note + '</span></button>';
+      }).join('') + '</div>')
+    + (active
+        ? '<button class="ghost-btn" onclick="proRenew()">Renew or extend</button>'
+        : '<button class="share-btn" onclick="startPro()">Continue to payment</button>')
+    + '<div class="pro-note-small">Pay by UPI, card or netbanking. The payment is handled by Razorpay — Pulse never sees your card details.</div>'
+    + '</div>';
+}
+function loadRazorpay(){
+  return new Promise(function(resolve, reject){
+    if(window.Razorpay){ razorpayLoaded = true; return resolve(true); }
+    var s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = function(){ razorpayLoaded = true; resolve(true); };
+    s.onerror = function(){ reject(new Error('checkout script could not load')); };
+    document.head.appendChild(s);
+  });
+}
+async function startPro(){
+  if(!me) return;
+  try {
+    toast('Starting secure checkout...');
+    var sess = await supa.auth.getSession();
+    var token = sess.data && sess.data.session ? sess.data.session.access_token : '';
+    var r = await fetch(PAY_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'create_order', plan: proPlanChosen })
+    });
+    var data = await r.json();
+    if(data && data.error === 'payments_not_configured'){ toast('Payments are not switched on yet'); return; }
+    if(!data || !data.order_id){ toast('Could not start the payment'); return; }
+    await loadRazorpay();
+    var rzp = new window.Razorpay({
+      key: data.key_id,
+      amount: data.amount,
+      currency: 'INR',
+      name: 'Pulse',
+      description: 'Pulse Pro',
+      order_id: data.order_id,
+      prefill: { name: me.display_name || me.username, email: myEmail || '' },
+      theme: { color: '#0095F6' },
+      handler: function(resp){ confirmPro(data.order_id, resp.razorpay_payment_id, resp.razorpay_signature); },
+      modal: { ondismiss: function(){ toast('Payment cancelled'); } }
+    });
+    rzp.open();
+  } catch(e){
+    console.error(e);
+    toast('Could not open the payment window');
+  }
+}
+async function confirmPro(orderId, paymentId, signature){
+  try {
+    var sess = await supa.auth.getSession();
+    var token = sess.data && sess.data.session ? sess.data.session.access_token : '';
+    var r = await fetch(PAY_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'verify', plan: proPlanChosen, order_id: orderId, payment_id: paymentId, signature: signature })
+    });
+    var data = await r.json();
+    if(data && data.ok){
+      toast('Welcome to Pulse Pro!');
+      await loadPro();
+      renderPro();
+    } else {
+      toast('We could not confirm that payment — nothing extra was charged, please try again');
+    }
+  } catch(e){
+    console.error(e);
+    toast('Could not confirm the payment');
+  }
+}
+
 /* ---------------- Text on stories ---------------- */
 var ST_COLORS = ['#ffffff', '#111111', '#ED4956', '#FFD400', '#0095F6', '#2ECC71'];
 var ST_FONTS = [
@@ -3280,6 +3411,7 @@ function renderSettings(){
     book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3.5h12v17l-6-4-6 4Z"/></svg>',
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.4-3 8-7 9-4-1-7-4.6-7-9V6Z"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="1"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8Z"/></svg>',
     people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/><path d="M16.5 6.2a3.2 3.2 0 0 1 0 6.1"/><path d="M18 14.6c2 .6 3.5 2.2 3.5 4.9"/></svg>',
     out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13A1.5 1.5 0 0 1 18.5 20H15"/><path d="m10 8-4 4 4 4"/><path d="M6 12h9"/></svg>'
   };
@@ -3295,6 +3427,7 @@ function renderSettings(){
       + '<button class="set-back" onclick="showView(\'profile\')" title="Back">'
       + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></button>'
       + '<h2>Settings</h2></div>'
+    + '<div class="set-group">' + row(ic.star, 'Pulse Pro', 'showView(\'pro\')', isPro() ? 'Active' : 'Upgrade') + '</div>'
     + '<div class="set-title">Account</div>'
     + '<div class="set-group">'
       + row(ic.mail, (myEmail ? 'Email' : 'Add email'), 'openAddEmail()', emailVal)

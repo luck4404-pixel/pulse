@@ -643,6 +643,27 @@
     .bottomnav{display:none;}
     body{padding-bottom:0;}
   }
+  /* ---------- Pulse Pro ---------- */
+  .pro-chip{background:linear-gradient(45deg,var(--accent-a),var(--accent-b));color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:5px;margin-left:6px;letter-spacing:.6px;vertical-align:middle;}
+  .pro-hero{text-align:center;padding:16px 10px 14px;}
+  .pro-badge{width:64px;height:64px;border-radius:50%;background:linear-gradient(45deg,var(--accent-a),var(--accent-b) 50%,var(--accent-d));display:flex;align-items:center;justify-content:center;margin:0 auto 12px;color:#fff;}
+  .pro-badge svg{width:34px;height:34px;}
+  .pro-hero h3{margin:0 0 6px;font-size:22px;}
+  .pro-hero p{margin:0;font-size:13.5px;color:var(--text-soft);}
+  .pro-benefit{display:flex;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);align-items:flex-start;}
+  .pro-benefit:last-child{border-bottom:none;}
+  .pro-tick{color:#2E9E5B;font-weight:700;}
+  .pro-benefit b{display:block;font-size:14.5px;font-weight:600;}
+  .pro-benefit span{font-size:12.5px;color:var(--text-soft);}
+  .pro-plans{display:flex;gap:10px;margin-bottom:14px;}
+  .pro-plan{flex:1;position:relative;border:2px solid var(--border);background:var(--surface);border-radius:12px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:inherit;cursor:pointer;color:var(--text);}
+  .pro-plan.on{border-color:var(--accent-d);}
+  .pro-plan.best{border-color:var(--accent-b);}
+  .pro-price{font-size:20px;font-weight:700;}
+  .pro-note{font-size:11.5px;color:var(--text-soft);text-align:center;}
+  .pro-tag{position:absolute;top:-9px;background:var(--accent-b);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.5px;}
+  .pro-note-small{font-size:11.5px;color:var(--text-soft);text-align:center;line-height:1.5;margin-top:12px;}
+
   /* ---------- Text on stories ---------- */
   #story-text-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
   #story-text-layer .st-item.editable{pointer-events:auto;}
@@ -1174,6 +1195,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 </body>
 </html>
