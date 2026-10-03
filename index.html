@@ -810,10 +810,11 @@
     .set-row .val{max-width:130px;}
   }
 
-  /* phones: swipe up/down inside the full-screen viewer is switched OFF
-     (use the arrow buttons to move between posts) — desktop keeps scrolling */
+  /* phones: hide the up/down arrow buttons — on a phone you just swipe with your finger.
+     (desktop keeps the buttons) */
   @media (max-width:700px){
-    #shorts-scroller{touch-action:pan-x;overscroll-behavior:contain;}
+    #shorts-nav{display:none;}
+    #shorts-scroller{overscroll-behavior:contain;}
   }
 </style>
 </head>
@@ -1233,6 +1234,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 </body>
 </html>
