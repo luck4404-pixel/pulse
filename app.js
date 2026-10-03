@@ -912,8 +912,6 @@ function renderPost(p){
             }).join('')
           + '</div>'
         : '<img src="' + p.img + '" loading="lazy" decoding="async" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">')
-      + (p.audio ? '<div class="post-vol" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></div>' : '')
-      + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
     + '<div class="post-actions">'
@@ -1014,35 +1012,52 @@ function setVolume(v){
   var chips = document.querySelectorAll('.post-vol input, .short-vol input');
   for(var i=0;i<chips.length;i++){ if(Number(chips[i].value) !== pct) chips[i].value = pct; }
 }
+var audioWantedId = null;   // the song we actually want playing right now
 function stopAudio(){
+  audioWantedId = null;
   if(currentAudio){ try{ currentAudio.pause(); }catch(e){} currentAudio = null; }
   playingAudioPostId = null;
   var chips = document.querySelectorAll('.music-chip, .post-speaker, #shorts-scroller .reel-music-chip, #shorts-scroller .short-song');
   for(var i=0;i<chips.length;i++) chips[i].classList.remove('playing');
+  var vols = document.querySelectorAll('.short-vol');
+  for(var v=0;v<vols.length;v++) vols[v].classList.remove('show');
 }
-function togglePostAudio(id){
+function togglePostAudio(id, byUser){
   var p = postIndex[id];
   if(!p || !p.audio) return;
-  if(playingAudioPostId === id){ stopAudio(); return; }
+  if(audioWantedId === id){ stopAudio(); return; }
   stopAudio();
-  try { currentAudio = applyVol(new Audio(p.audio)); }
-  catch(e){ toast('Could not play this audio'); return; }
-  currentAudio.onended = stopAudio;
-  currentAudio.onerror = function(){ toast('Could not play this audio'); stopAudio(); };
-  currentAudio.play().then(function(){
+  audioWantedId = id;
+  var a;
+  try { a = applyVol(new Audio(p.audio)); }
+  catch(e){ toast('Could not play this audio'); audioWantedId = null; return; }
+  currentAudio = a;
+  a.onended = function(){ if(audioWantedId === id) stopAudio(); };
+  a.onerror = function(){ if(audioWantedId === id){ toast('Could not play this audio'); stopAudio(); } };
+  a.play().then(function(){
+    if(audioWantedId !== id){ try{ a.pause(); }catch(e){} return; }   // a newer song took over
     playingAudioPostId = id;
-    if(p.audioStart > 0){ try{ currentAudio.currentTime = p.audioStart; }catch(e){} }
+    if(p.audioStart > 0){ try{ a.currentTime = p.audioStart; }catch(e){} }
     var chips = document.querySelectorAll('#mc-' + id);
     for(var ci=0;ci<chips.length;ci++) chips[ci].classList.add('playing');
     var spks = document.querySelectorAll('#spk-' + id);
     for(var si=0;si<spks.length;si++) spks[si].classList.add('playing');
-    var sChips = document.querySelectorAll('#shorts-scroller .short-slide[data-post="' + id + '"] .reel-music-chip');
+    var sChips = document.querySelectorAll('#shorts-scroller .short-slide[data-post=\"' + id + '\"] .reel-music-chip');
     for(var sci=0;sci<sChips.length;sci++) sChips[sci].classList.add('playing');
     var rBtns = document.querySelectorAll('#shorts-scroller .short-song');
     for(var rbi=0;rbi<rBtns.length;rbi++) rBtns[rbi].classList.remove('playing');
     var rBtn = document.getElementById('sr-' + id);
     if(rBtn) rBtn.classList.add('playing');
-  }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
+    if(byUser){   // the speaker was tapped on purpose -> reveal the volume control
+      var vols = document.querySelectorAll('#shorts-scroller .short-slide[data-post=\"' + id + '\"] .short-vol');
+      for(var vi=0;vi<vols.length;vi++) vols[vi].classList.add('show');
+    }
+  }).catch(function(err){
+    if(err && err.name === 'AbortError') return;   // interrupted on purpose, not a failure
+    if(audioWantedId !== id) return;               // another song took over, not a failure
+    toast('Could not play this audio');
+    stopAudio();
+  });
 }
 
 var lastFeedSig = null;
@@ -1288,15 +1303,15 @@ function shortsActive(id){
   var p = postIndex[id];
   if(!p) return;
   if(p.audio){
-    if(playingAudioPostId !== id) togglePostAudio(id);
-  } else if(playingAudioPostId){
+    if(audioWantedId !== id) togglePostAudio(id);   // the song starts by itself
+  } else if(audioWantedId){
     stopAudio();
   }
 }
 
 function shortAudioToggle(id){
-  if(playingAudioPostId === id){ stopAudio(); return; }
-  togglePostAudio(id);
+  if(audioWantedId === id){ stopAudio(); return; }
+  togglePostAudio(id, true);   // tapped on purpose -> also reveal the volume slider
 }
 
 function shortsGo(dir){
