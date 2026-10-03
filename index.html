@@ -643,6 +643,30 @@
     .bottomnav{display:none;}
     body{padding-bottom:0;}
   }
+  /* ---------- Text on stories ---------- */
+  #story-text-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+  #story-text-layer .st-item.editable{pointer-events:auto;}
+  .sv-text-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+  .st-item{position:absolute;transform:translate(-50%,-50%);max-width:88%;text-align:center;line-height:1.25;white-space:pre-wrap;word-break:break-word;text-shadow:0 1px 6px rgba(0,0,0,.35);}
+  .st-item.editable{cursor:grab;touch-action:none;}
+  .st-item.editable.sel{outline:2px dashed rgba(255,255,255,.9);outline-offset:5px;border-radius:6px;}
+  .st-ph{opacity:.75;}
+  #story-text-tools{margin-top:10px;}
+  .st-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .st-add{background:#0095F6;color:#fff;border:none;border-radius:9px;padding:9px 14px;font-weight:700;font-size:13.5px;font-family:inherit;cursor:pointer;}
+  .st-hint{font-size:11.5px;color:var(--text-soft);}
+  #st-edit-panel{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg);}
+  #st-text-input{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none;margin-bottom:8px;font-family:inherit;}
+  .st-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .st-row:last-child{margin-bottom:0;}
+  .st-sw{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
+  .st-sw.on{border-color:var(--accent-d);}
+  .st-font{width:38px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px;cursor:pointer;}
+  .st-font.on{border-color:var(--accent-d);color:var(--accent-d);}
+  .st-mini{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:7px 11px;font-size:12.5px;font-family:inherit;cursor:pointer;}
+  .st-mini.on{background:#0095F6;color:#fff;border-color:#0095F6;}
+  .st-del{margin-left:auto;border:1px solid var(--border);background:var(--surface);color:#ED4956;border-radius:8px;padding:7px 11px;font-size:12.5px;font-family:inherit;cursor:pointer;}
+
   /* ---------- Follow-a-few screen + invites ---------- */
   .f5-overlay{position:fixed;inset:0;background:var(--bg);z-index:120;display:none;flex-direction:column;}
   .f5-overlay.open{display:flex;}
@@ -820,12 +844,30 @@
       </div>
       <div id="preview-wrap">
         <img id="preview-img" class="preview-img" style="display:none" alt="Preview">
+        <div id="story-text-layer"></div>
         <div id="crop-box">
           <div class="h nw"></div><div class="h n"></div><div class="h ne"></div>
           <div class="h w"></div><div class="h e"></div><div class="h sw"></div><div class="h s"></div><div class="h se"></div>
         </div>
       </div>
       <div id="multi-thumbs"></div>
+      <div id="story-text-tools" style="display:none;">
+        <div class="st-toolbar">
+          <button type="button" class="st-add" onclick="stAddText()">Aa Add text</button>
+          <span class="st-hint">Drag the text on the photo to move it</span>
+        </div>
+        <div id="st-edit-panel" style="display:none;">
+          <input id="st-text-input" placeholder="Type something..." oninput="stUpdateText(this.value)">
+          <div class="st-row" id="st-colors"></div>
+          <div class="st-row" id="st-fonts"></div>
+          <div class="st-row">
+            <button type="button" class="st-mini" onclick="stSetSize(-1)">A-</button>
+            <button type="button" class="st-mini" onclick="stSetSize(1)">A+</button>
+            <button type="button" class="st-mini" id="st-bg-btn" onclick="stToggleBg()">Highlight</button>
+            <button type="button" class="st-del" onclick="stDeleteText()">Delete</button>
+          </div>
+        </div>
+      </div>
       <div id="editor-tools" style="display:none;">
         <div class="field-label" style="margin-top:2px;">Edit photo</div>
         <div class="ed-row"><span>Brightness</span><input type="range" id="ed-bright" min="50" max="150" value="100" oninput="onEdSlider('bright',this.value)"><b id="ed-bright-v">100</b></div>
@@ -938,6 +980,7 @@
   </div>
   <div class="sv-stage">
     <img id="sv-image" src="">
+    <div id="sv-text-layer" class="sv-text-layer"></div>
     <button class="sv-tap left" onclick="storyPrev()"></button>
     <button class="sv-tap right" onclick="storyNext()"></button>
     <div id="sv-music-sticker"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle"></span></div>
@@ -1131,6 +1174,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>

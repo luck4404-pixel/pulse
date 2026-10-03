@@ -127,6 +127,9 @@ let storyLikesReady = null;  // story_likes table exists
 let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
 let mediaUrlsReady = null;   // posts.media_urls column exists (multi-photo posts)
+let storyTextReady = null;   // stories.text_overlays column exists (text on stories)
+var storyTexts = [];         // text items on the story being composed
+var stSel = -1;              // which text item is selected in the composer
 let pendingChatFile = null;  // file staged via the paperclip — sent only when Send is tapped
 let msgMenuId = null;        // options-menu open for this message id
 let msgMenuMedia = null;     // media url of the message whose menu is open
@@ -193,9 +196,9 @@ async function afterLogin(){
   }
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
-    const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady].join(',');
+    const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady].join(',');
     runProbes().then(function(){
-      const probeAfter = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady].join(',');
+      const probeAfter = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady].join(',');
       if(probeBefore !== probeAfter) scheduleRefresh();
     });
   } else {
@@ -519,6 +522,10 @@ function mediaField(){
   if(!mediaUrlsReady) return '';
   return ',media_urls';
 }
+function storyTextField(){
+  if(!storyTextReady) return '';
+  return ',text_overlays';
+}
 
 async function checkSongTable(){
   try {
@@ -532,6 +539,12 @@ async function checkMusicStart(){
     const q = await supa.from('posts').select('audio_start').limit(1);
     musicStartReady = !q.error;
   } catch(e){ musicStartReady = false; }
+}
+async function checkStoryText(){
+  try {
+    const q = await supa.from('stories').select('text_overlays').limit(1);
+    storyTextReady = !q.error;
+  } catch(e){ storyTextReady = false; }
 }
 async function checkMediaUrls(){
   try {
@@ -562,7 +575,7 @@ async function checkMediaMsgV2(){
 async function runProbes(){
   await Promise.all([
     checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMediaUrls(),
-    checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2()
+    checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2(), checkStoryText()
   ]);
   saveProbeCache();
 }
@@ -578,6 +591,7 @@ function loadProbeCache(){
     mediaMsgReady = probeCache.mediaMsgReady;
     mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
     mediaUrlsReady = probeCache.mediaUrlsReady;
+    storyTextReady = probeCache.storyTextReady;
   }
 }
 function saveProbeCache(){
@@ -586,7 +600,8 @@ function saveProbeCache(){
       musicReady: musicReady, songsReady: songsReady,
       musicStartReady: musicStartReady, storyLikesReady: storyLikesReady,
       mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready,
-      mediaUrlsReady: mediaUrlsReady
+      mediaUrlsReady: mediaUrlsReady,
+      storyTextReady: storyTextReady
     }));
   } catch(e){}
 }
@@ -675,7 +690,7 @@ async function fetchSavedPosts(){
 async function fetchStories(){
   const since = new Date(Date.now() - 24*3600*1000).toISOString();
   const q = await supa.from('stories')
-    .select('id,user_id,image_url,created_at' + audioFields() + ',profiles!stories_user_id_fkey(id,username,avatar_url)')
+    .select('id,user_id,image_url,created_at' + audioFields() + storyTextField() + ',profiles!stories_user_id_fkey(id,username,avatar_url)')
     .gt('created_at', since)
     .order('created_at', { ascending: true })
     .limit(300);
@@ -684,7 +699,7 @@ async function fetchStories(){
   (q.data || []).forEach(function(s){
     const uname = (s.profiles && s.profiles.username) || 'user';
     if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [] };
-    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0 });
+    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0, texts: Array.isArray(s.text_overlays) ? s.text_overlays : [] });
   });
   return map;
 }
@@ -1896,6 +1911,7 @@ function playStory(){
   loadStoryLikeState();
   const item = svUser.items[svIndex];
   document.getElementById('sv-image').src = item.img;
+  stRenderStoryTexts(item.texts || []);
   document.getElementById('sv-time').textContent = timeAgo(item.time);
   const sticker = document.getElementById('sv-music-sticker');
   if(item.audio){
@@ -2059,11 +2075,20 @@ function openCreateModal(tab){
 }
 function setCreateTab(tab){
   createTab = tab;
+  stShowTools();
   document.getElementById('tab-post').classList.toggle('active', tab === 'post');
   document.getElementById('tab-story').classList.toggle('active', tab === 'story');
   document.getElementById('create-title').textContent = tab === 'post' ? 'Create new post' : 'Add to your story';
   document.getElementById('caption-input').style.display = tab === 'post' ? 'block' : 'none';
   document.getElementById('share-btn').textContent = tab === 'post' ? 'Share' : 'Add to story';
+}
+function stShowTools(){
+  var tools = document.getElementById('story-text-tools');
+  if(!tools) return;
+  var hasImage = document.getElementById('preview-wrap').style.display === 'block';
+  var show = (createTab === 'story') && hasImage;
+  tools.style.display = show ? 'block' : 'none';
+  if(show) stRender(); else { storyTexts = []; stSel = -1; stRender(); }
 }
 function closeCreateModal(){
   stopPreview();
@@ -2115,6 +2140,7 @@ document.getElementById('file-input').addEventListener('change', function(e){
     document.getElementById('drop-zone').style.display = 'none';
     document.getElementById('share-btn').disabled = false;
     renderThumbs();
+    stShowTools();
   });
 });
 
@@ -2770,6 +2796,11 @@ async function publishCreate(){
     } else {
       if(urls.length > 1) toast('Stories take one photo — the first one was used');
       var payload2 = { user_id: me.id, image_url: urls[0] };
+      var cleanTexts = storyTexts.filter(function(it){ return (it.t || '').trim(); });
+      if(cleanTexts.length){
+        if(storyTextReady) payload2.text_overlays = cleanTexts;
+        else toast('Text needs a one-time SQL update in Supabase — see story-text.sql');
+      }
       if(audioUrl){
         payload2.audio_url = audioUrl;
         payload2.audio_title = pendingSong.title || null;
@@ -2778,6 +2809,7 @@ async function publishCreate(){
       }
       const r = await supa.from('stories').insert(payload2);
       if(r.error) throw r.error;
+      storyTexts = []; stSel = -1;
       closeCreateModal();
       await refreshData();
       renderFeed();
@@ -3077,6 +3109,160 @@ function renderFollow5(){
 function closeFollow5(){
   try { localStorage.setItem('pulse-follow5-done', '1'); } catch(e){}
   document.getElementById('follow5-overlay').classList.remove('open');
+}
+
+/* ---------------- Text on stories ---------------- */
+var ST_COLORS = ['#ffffff', '#111111', '#ED4956', '#FFD400', '#0095F6', '#2ECC71'];
+var ST_FONTS = [
+  { k: 'classic', label: 'Aa', css: "font-family:'Inter',system-ui,sans-serif;font-weight:600;" },
+  { k: 'bold',    label: 'Aa', css: "font-family:'Poppins',sans-serif;font-weight:700;" },
+  { k: 'serif',   label: 'Aa', css: "font-family:Georgia,'Times New Roman',serif;font-weight:600;" },
+  { k: 'mono',    label: 'Aa', css: "font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;" }
+];
+function stFontCss(k){
+  for(var i=0;i<ST_FONTS.length;i++){ if(ST_FONTS[i].k === k) return ST_FONTS[i].css; }
+  return ST_FONTS[0].css;
+}
+function stItemStyle(it, width){
+  var fs = Math.round((width || 360) * (it.s || 6) / 100);
+  var bg = it.bg === 'dark' ? 'background:rgba(0,0,0,.55);padding:.14em .55em;border-radius:.4em;'
+         : it.bg === 'light' ? 'background:rgba(255,255,255,.92);padding:.14em .55em;border-radius:.4em;'
+         : '';
+  var col = it.bg === 'light' ? '#111111' : (it.c || '#ffffff');
+  return 'left:' + (it.x == null ? 50 : it.x) + '%;top:' + (it.y == null ? 30 : it.y) + '%;'
+    + 'font-size:' + fs + 'px;color:' + col + ';' + stFontCss(it.f) + bg;
+}
+function stRenderInto(layer, items, interactive){
+  if(!layer) return;
+  var w = layer.clientWidth || 360;
+  layer.innerHTML = (items || []).map(function(it, i){
+    var sel = (interactive && i === stSel) ? ' sel' : '';
+    return '<div class="st-item' + (interactive ? ' editable' : '') + sel + '" data-i="' + i + '" style="' + stItemStyle(it, w) + '">'
+      + (esc(it.t || '') || (interactive ? '<span class="st-ph">Tap to type</span>' : '')) + '</div>';
+  }).join('');
+  if(interactive) stAttachDrag(layer);
+}
+function stAttachDrag(layer){
+  Array.prototype.forEach.call(layer.querySelectorAll('.st-item.editable'), function(el){
+    el.addEventListener('pointerdown', function(e){
+      e.preventDefault();
+      var i = Number(el.getAttribute('data-i'));
+      stSelect(i);
+      el.style.zIndex = 5;
+      var rect = layer.getBoundingClientRect();
+      try { el.setPointerCapture(e.pointerId); } catch(err){}
+      function move(ev){
+        var it = storyTexts[i];
+        if(!it) return;
+        var x = ((ev.clientX - rect.left) / rect.width) * 100;
+        var y = ((ev.clientY - rect.top) / rect.height) * 100;
+        it.x = Math.round(Math.max(4, Math.min(96, x)));
+        it.y = Math.round(Math.max(4, Math.min(96, y)));
+        el.style.left = it.x + '%';
+        el.style.top = it.y + '%';
+      }
+      function up(){
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+        el.removeEventListener('pointercancel', up);
+      }
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+    });
+  });
+}
+function stSelectVisual(){
+  // update the selection + controls WITHOUT rebuilding the layer
+  // (rebuilding mid-drag would destroy the element being dragged)
+  var layer = document.getElementById('story-text-layer');
+  if(layer){
+    Array.prototype.forEach.call(layer.querySelectorAll('.st-item'), function(el){
+      el.classList.toggle('sel', Number(el.getAttribute('data-i')) === stSel);
+    });
+  }
+  var panel = document.getElementById('st-edit-panel');
+  if(panel) panel.style.display = stSel >= 0 ? 'block' : 'none';
+  var input = document.getElementById('st-text-input');
+  if(input && stSel >= 0 && storyTexts[stSel] && document.activeElement !== input) input.value = storyTexts[stSel].t || '';
+  stPaintControls();
+}
+function stRender(){
+  var layer = document.getElementById('story-text-layer');
+  if(layer) stRenderInto(layer, storyTexts, true);
+  stSelectVisual();
+}
+function stPaintControls(){
+  var it = storyTexts[stSel];
+  var colors = document.getElementById('st-colors');
+  if(colors){
+    colors.innerHTML = ST_COLORS.map(function(c){
+      var on = it && (it.c || '#ffffff') === c && it.bg !== 'light';
+      return '<button type="button" class="st-sw' + (on ? ' on' : '') + '" style="background:' + c + '" onclick="stSetColor(\'' + c + '\')"></button>';
+    }).join('');
+  }
+  var fonts = document.getElementById('st-fonts');
+  if(fonts){
+    fonts.innerHTML = ST_FONTS.map(function(f){
+      var on = it && (it.f || 'classic') === f.k;
+      return '<button type="button" class="st-font' + (on ? ' on' : '') + '" style="' + f.css + '" onclick="stSetFont(\'' + f.k + '\')">' + f.label + '</button>';
+    }).join('');
+  }
+  var bgBtn = document.getElementById('st-bg-btn');
+  if(bgBtn){
+    bgBtn.classList.toggle('on', !!(it && it.bg));
+    bgBtn.textContent = it && it.bg === 'light' ? 'Highlight: light' : (it && it.bg === 'dark' ? 'Highlight: dark' : 'Highlight');
+  }
+}
+function stAddText(){
+  storyTexts.push({ t: '', x: 50, y: 30, c: '#ffffff', f: 'classic', s: 6, bg: null });
+  stSel = storyTexts.length - 1;
+  stRender();
+  var input = document.getElementById('st-text-input');
+  if(input){ input.value = ''; input.focus(); }
+}
+function stSelect(i){
+  stSel = i;
+  stSelectVisual();
+}
+function stUpdateText(v){
+  if(stSel < 0 || !storyTexts[stSel]) return;
+  storyTexts[stSel].t = v;
+  var layer = document.getElementById('story-text-layer');
+  if(layer) stRenderInto(layer, storyTexts, true);
+}
+function stSetColor(c){
+  if(stSel < 0 || !storyTexts[stSel]) return;
+  storyTexts[stSel].c = c;
+  stRender();
+}
+function stSetFont(k){
+  if(stSel < 0 || !storyTexts[stSel]) return;
+  storyTexts[stSel].f = k;
+  stRender();
+}
+function stSetSize(delta){
+  if(stSel < 0 || !storyTexts[stSel]) return;
+  var it = storyTexts[stSel];
+  it.s = Math.max(3, Math.min(18, (it.s || 6) + delta));
+  stRender();
+}
+function stToggleBg(){
+  if(stSel < 0 || !storyTexts[stSel]) return;
+  var it = storyTexts[stSel];
+  it.bg = it.bg === 'dark' ? 'light' : (it.bg === 'light' ? null : 'dark');
+  stRender();
+}
+function stDeleteText(){
+  if(stSel < 0) return;
+  storyTexts.splice(stSel, 1);
+  stSel = storyTexts.length ? storyTexts.length - 1 : -1;
+  stRender();
+}
+function stRenderStoryTexts(items){
+  var layer = document.getElementById('sv-text-layer');
+  if(!layer) return;
+  stRenderInto(layer, items || [], false);
 }
 
 /* ---------------- Settings ---------------- */
