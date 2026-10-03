@@ -912,6 +912,7 @@ function renderPost(p){
             }).join('')
           + '</div>'
         : '<img src="' + p.img + '" loading="lazy" decoding="async" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">')
+      + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
     + '<div class="post-actions">'
