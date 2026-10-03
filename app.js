@@ -891,7 +891,7 @@ function renderPost(p){
       + (multi
         ? '<div class="car-track" onscroll="carScrolled(this)" ontouchstart="carTouchStart(event)" ontouchmove="carTouchMove(event)" ontouchend="carTouchEnd()">'
           + mediaList.map(function(u){
-              return '<img src="' + u + '" loading="lazy" draggable="false" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">';
+              return '<img src="' + u + '" loading="lazy" decoding="async" draggable="false" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">';
             }).join('')
           + '</div>'
           + '<button class="car-btn left" style="display:none" onclick="event.stopPropagation();carGo(this,-1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
@@ -902,7 +902,7 @@ function renderPost(p){
               return '<button class="car-dot' + (mi === 0 ? ' on' : '') + '" onclick="event.stopPropagation();carDot(this,' + mi + ')" ondblclick="event.stopPropagation()"></button>';
             }).join('')
           + '</div>'
-        : '<img src="' + p.img + '" loading="lazy" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">')
+        : '<img src="' + p.img + '" loading="lazy" decoding="async" style="cursor:zoom-in" onclick="imgTap(\'' + p.id + '\')" onerror="this.onerror=null;this.src=photoPlaceholder">')
       + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
       + '<div class="burst" id="burst-' + p.id + '">' + heartFilled + '</div>'
     + '</div>'
@@ -1035,8 +1035,28 @@ function togglePostAudio(id){
   }).catch(function(){ toast('Could not play this audio'); stopAudio(); });
 }
 
-function renderFeed(){
-  document.getElementById('main-col').innerHTML =
+var lastFeedSig = null;
+function feedSignature(){
+  var s = (me ? me.username : '') + '|' + mySaved.size + '|';
+  s += (posts || []).map(function(p){
+    return p.id + ':' + p.user + ':' + (p.likes ? p.likes.length : 0) + ':' + (p.comments ? p.comments.length : 0) + ':' + (p.badge || '') + ':' + (p.is_pro ? 1 : 0);
+  }).join(',');
+  s += '|' + Object.keys(storiesByUser || {}).map(function(u){
+    var st = storiesByUser[u];
+    return u + ':' + (st && st.items ? st.items.length : 0) + ':' + (st && st.items && st.items[0] ? st.items[0].id : '');
+  }).join(',');
+  return s;
+}
+/* Live updates used to redraw the whole feed on every single change, which made
+   the screen flicker while scrolling. Now the feed is only redrawn when the
+   content actually changed. */
+function renderFeed(force){
+  var col = document.getElementById('main-col');
+  if(!col) return;
+  var sig = feedSignature();
+  if(!force && sig === lastFeedSig && col.querySelector('.post')) return;
+  lastFeedSig = sig;
+  col.innerHTML =
     renderStories() + (posts.length ? posts.map(renderPost).join('') :
     (feedLoaded
       ? '<div class="empty-note">No posts yet.<br>Be the first — tap the + button!</div>'
@@ -1232,12 +1252,12 @@ function renderShortSlide(p){
 function shortMediaHtml(p){
   var media = (p.media && p.media.length ? p.media : [p.img]);
   if(media.length < 2){
-    return '<img class="short-img" src="' + p.img + '" alt="" ondblclick="shortLike(\'' + p.id + '\', true)">';
+    return '<img class="short-img" src="' + p.img + '" alt="" decoding="async" ondblclick="shortLike(\'' + p.id + '\', true)">';
   }
   return '<div class="post-media carousel short-car">'
     + '<div class="car-track" onscroll="carScrolled(this)" ontouchstart="carTouchStart(event)" ontouchmove="carTouchMove(event)" ontouchend="carTouchEnd()">'
     + media.map(function(u){
-        return '<img src="' + u + '" alt="" draggable="false" ondblclick="shortLike(\'' + p.id + '\', true)">';
+        return '<img src="' + u + '" alt="" decoding="async" draggable="false" ondblclick="shortLike(\'' + p.id + '\', true)">';
       }).join('')
     + '</div>'
     + '<button class="car-btn left" style="display:none" onclick="event.stopPropagation();carGo(this,-1)" ondblclick="event.stopPropagation()"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
@@ -1774,7 +1794,7 @@ function showView(v){
     const el = document.getElementById(id);
     if(el) el.classList.remove('active');
   });
-  if(v === 'feed'){ renderFeed(); markNav('nav-feed'); }
+  if(v === 'feed'){ renderFeed(true); markNav('nav-feed'); }
   else if(v === 'explore'){ renderExplore(); markNav('nav-explore'); }
   else if(v === 'reels'){ app.classList.add('full'); renderReels(); markNav('nav-reels'); }
   else if(v === 'messages'){ app.classList.add('wide'); renderMessages(); }

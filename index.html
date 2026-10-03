@@ -643,6 +643,12 @@
     .bottomnav{display:none;}
     body{padding-bottom:0;}
   }
+  /* ---------- Smoothness ---------- */
+  .post{contain:content;}                       /* keeps long feeds light to repaint */
+  .stories,.car-track,#shorts-scroller,.chat-thread{-webkit-overflow-scrolling:touch;}
+  #shorts-scroller,.modal-overlay{overscroll-behavior:contain;}  /* no scroll bleeding */
+  .post-media img,.short-img{background:var(--bg);}
+
   /* ---------- Volume + multi-photo swiper in the full-screen viewer ---------- */
   .music-chip .vol{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px;}
   .music-chip .vol input{width:64px;height:18px;accent-color:#0095F6;}
@@ -1212,6 +1218,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 </body>
 </html>
