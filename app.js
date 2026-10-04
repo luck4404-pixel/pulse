@@ -1706,6 +1706,7 @@ async function renderProfile(){
         + '<h2>' + esc(me.username) + tickFor(me, true)
           + ' <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button>'
           + ' <button class="toggle-theme" onclick="showView(\'settings\')">⚙ Settings</button>'
+          + (me.is_admin ? ' <button class="toggle-theme" style="color:#E0A32E;font-weight:600;" onclick="openGrantPro(\'' + me.id + '\',\'' + me.username + '\',' + (isPro() ? 'true' : 'false') + ')">' + (isPro() ? 'Pro ✓' : 'Give Pro') + '</button>' : '')
           + (!myEmail ? ' <button class="toggle-theme" style="color:var(--accent-d);font-weight:600;" onclick="openAddEmail()">✉ Add email</button>' : '')
         + '</h2>'
         + '<div class="profile-stats">'
@@ -1782,6 +1783,7 @@ async function renderOtherProfile(username){
           + ' <button class="primary-btn" id="follow-btn-' + prof.id + '" onclick="toggleFollow(\'' + prof.id + '\')">' + (iFollow ? 'Following' : 'Follow') + '</button>'
           + ' <button class="toggle-theme" onclick="messageUser(\'' + prof.id + '\')">Message</button>'
           + (me.is_admin ? ' <button class="toggle-theme" style="color:#0095F6;font-weight:600;" onclick="toggleBlueTick(\'' + prof.id + '\',\'' + prof.username + '\',' + (prof.badge === 'blue' ? 'true' : 'false') + ')">' + (prof.badge === 'blue' ? 'Remove blue tick' : 'Give blue tick') + '</button>' : '')
+          + (me.is_admin ? ' <button class="toggle-theme" style="color:#E0A32E;font-weight:600;" onclick="openGrantPro(\'' + prof.id + '\',\'' + prof.username + '\',' + (prof.is_pro ? 'true' : 'false') + ')">' + (prof.is_pro ? 'Pro ✓' : 'Give Pro') + '</button>' : '')
         + '</h2>'
         + '<div class="profile-stats">'
           + '<span><b>' + postCount + '</b> posts</span>'
@@ -3563,6 +3565,7 @@ function stRenderStoryTexts(items){
 /* ---------------- Payments: UPI QR + owner approval ---------------- */
 var upiSettings = { upi_id: '', upi_name: 'Pulse' };
 var myPaymentPending = null;   // my newest claim that is still waiting
+var gpTarget = null;           // who the owner is about to give Pro to
 var pendingPayments = [];      // owner: claims waiting for review
 
 async function loadSettings(){
@@ -3683,6 +3686,51 @@ async function submitUtr(){
     await loadPayments();
     renderPro();
   } catch(e){ console.error(e); toast('Could not send'); }
+}
+
+/* owner: give Pro to someone with a tap */
+function openGrantPro(uid, username, isProNow){
+  if(!me || !me.is_admin){ toast('Only the owner can do this'); return; }
+  gpTarget = { uid: uid, username: username };
+  var who = document.getElementById('gp-who');
+  if(who) who.textContent = '@' + username;
+  var rev = document.getElementById('gp-revoke');
+  if(rev) rev.style.display = isProNow ? 'block' : 'none';
+  document.getElementById('grant-pro-modal').classList.add('open');
+}
+function closeGrantPro(){
+  gpTarget = null;
+  document.getElementById('grant-pro-modal').classList.remove('open');
+}
+async function doGrantPro(days){
+  if(!gpTarget || !me || !me.is_admin) return;
+  var t = gpTarget;
+  try {
+    var r = await supa.rpc('grant_pro', { target: t.uid, days: days });
+    if(r.error){
+      console.error(r.error);
+      toast('Could not give Pro - run grant-pro.sql in Supabase first');
+      return;
+    }
+    var until = '';
+    try { until = r.data ? new Date(r.data).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : ''; } catch(e){}
+    toast('Pro given to @' + t.username + (until ? ' until ' + until : ''));
+    closeGrantPro();
+    if(currentView === 'profile') renderProfile();
+    else renderOtherProfile(t.username);
+  } catch(e){ console.error(e); toast('Could not give Pro'); }
+}
+async function doRevokePro(){
+  if(!gpTarget || !me || !me.is_admin) return;
+  var t = gpTarget;
+  try {
+    var r = await supa.rpc('revoke_pro', { target: t.uid });
+    if(r.error){ toast('Could not remove Pro - run grant-pro.sql first'); return; }
+    toast('Pro removed from @' + t.username);
+    closeGrantPro();
+    if(currentView === 'profile') renderProfile();
+    else renderOtherProfile(t.username);
+  } catch(e){ console.error(e); toast('Could not remove Pro'); }
 }
 
 /* owner: set the UPI ID the money goes to */
@@ -3848,6 +3896,7 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('invite-modal').classList.contains('open')) closeInvite();
   else if(document.getElementById('pay-sheet').classList.contains('open')) closePaySheet();
   else if(document.getElementById('pay-setup-modal').classList.contains('open')) closePaymentSetup();
+  else if(document.getElementById('grant-pro-modal').classList.contains('open')) closeGrantPro();
 });
 
 /* ---------------- Realtime ---------------- */

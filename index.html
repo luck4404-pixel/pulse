@@ -1282,7 +1282,21 @@
   </div>
 </div>
 
+<!-- Owner: give Pulse Pro -->
+<div class="modal-overlay" id="grant-pro-modal" onclick="if(event.target===this)closeGrantPro()">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-head"><h3>Give Pulse Pro</h3><button onclick="closeGrantPro()">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;color:var(--text-soft);margin:0 0 12px;line-height:1.5;">Give <b id="gp-who" style="color:var(--text);"></b> Pro. Days add on top of whatever time they already have.</p>
+      <button class="share-btn" onclick="doGrantPro(30)">1 month</button>
+      <button class="share-btn" onclick="doGrantPro(365)">1 year</button>
+      <button class="ghost-btn" id="gp-revoke" style="display:none;color:#ED4956;" onclick="doRevokePro()">Remove Pro</button>
+      <button class="ghost-btn" onclick="closeGrantPro()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
-<script src="app.js?v=48"></script>
+<script src="app.js?v=49"></script>
 </body>
 </html>
