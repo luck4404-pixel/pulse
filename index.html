@@ -649,6 +649,27 @@
   #shorts-scroller,.modal-overlay{overscroll-behavior:contain;}  /* no scroll bleeding */
   .post-media img,.short-img{background:var(--bg);}
 
+  /* ---------- UPI payments ---------- */
+  .pay-amount{font-size:22px;font-weight:700;text-align:center;margin:2px 0 12px;}
+  .pay-amount span{font-size:12.5px;font-weight:500;color:var(--text-soft);}
+  .pay-qr{display:flex;align-items:center;justify-content:center;min-height:212px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:6px;margin-bottom:10px;}
+  .pay-qr img{width:200px;height:200px;display:block;}
+  .pay-qr-note{font-size:12px;color:#666;text-align:center;padding:0 12px;line-height:1.5;}
+  .pay-upi{font-size:13.5px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+  .pay-copy{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer;}
+  .pay-ref{font-size:12.5px;color:var(--text-soft);text-align:center;margin-bottom:12px;}
+  .pay-ref b{color:var(--accent-d);}
+  .pay-pending{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;font-size:13px;margin-bottom:12px;line-height:1.5;}
+  .pay-pending span{font-size:12px;color:var(--text-soft);}
+  .pay-req{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;background:var(--surface);}
+  .pay-req-top{display:flex;justify-content:space-between;align-items:center;font-size:14px;margin-bottom:6px;gap:8px;}
+  .pay-req-top span{font-size:12.5px;color:var(--text-soft);}
+  .pay-req-utr{font-size:13px;margin-bottom:4px;word-break:break-all;}
+  .pay-req-time{font-size:11.5px;color:var(--text-soft);margin-bottom:10px;}
+  .pay-req-btns{display:flex;gap:8px;}
+  .pay-approve{flex:1;background:#2E9E5B;color:#fff;border:none;border-radius:9px;padding:10px 0;font-weight:600;font-size:13.5px;font-family:inherit;cursor:pointer;}
+  .pay-reject{flex:1;background:var(--bg);color:#ED4956;border:1px solid var(--border);border-radius:9px;padding:10px 0;font-weight:600;font-size:13.5px;font-family:inherit;cursor:pointer;}
+
   /* ---------- Volume (sits just left of the speaker button) ---------- */
   .post-vol{
     position:absolute;top:10px;right:56px;height:38px;border-radius:19px;
@@ -813,6 +834,7 @@
   /* phones: hide the up/down arrow buttons — on a phone you just swipe with your finger.
      (desktop keeps the buttons) */
   @media (max-width:700px){
+    #top-theme-btn{display:none;}   /* make room for the Pulse Pro button on phones */
     #shorts-nav{display:none;}
     #shorts-scroller{overscroll-behavior:contain;}
   }
@@ -848,7 +870,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="badge-dot" style="background:#2ecc71;"></span>
       </button>
-      <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">
+      <button class="icon-btn" onclick="showView('pro')" title="Pulse Pro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8Z"/></svg>
+      </button>
+      <button class="icon-btn" id="top-theme-btn" onclick="toggleTheme()" title="Toggle theme">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5Z"/></svg>
       </button>
       <button class="icon-btn avatar-btn" id="top-avatar-btn" onclick="showView('profile')" title="Profile">
@@ -1233,7 +1258,31 @@
   </div>
 </div>
 
+<!-- Pay for Pulse Pro (UPI) -->
+<div class="modal-overlay" id="pay-sheet" onclick="if(event.target===this)closePaySheet()">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head"><h3>Pay for Pulse Pro</h3><button onclick="closePaySheet()">&times;</button></div>
+    <div class="modal-body" id="pay-body"></div>
+  </div>
+</div>
+
+<!-- Owner: where should payments go -->
+<div class="modal-overlay" id="pay-setup-modal" onclick="if(event.target===this)closePaymentSetup()">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head"><h3>Where should payments go?</h3><button onclick="closePaymentSetup()">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-soft);margin:0 0 6px;line-height:1.5;">Your UPI ID. Every Pulse payment goes here, and the payer's username is added to the payment note so you can tell who paid.</p>
+      <label class="field-label">UPI ID</label>
+      <input id="setup-upi-id" placeholder="yourname@bank">
+      <label class="field-label">Name shown on the payment</label>
+      <input id="setup-upi-name" placeholder="Pulse">
+      <button class="share-btn" onclick="savePaymentSetup()">Save</button>
+      <button class="ghost-btn" onclick="closePaymentSetup()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>

@@ -210,7 +210,7 @@ async function afterLogin(){
   } else {
     await runProbes(); // first visit: one parallel round of probes
   }
-  await Promise.all([loadFollows(), loadSavedIds(), loadPro()]);
+  await Promise.all([loadFollows(), loadSavedIds(), loadPro(), loadSettings(), loadPayments()]);
   loadSuggestions(); // side column — never blocks the feed
   await refreshData();
   setupRealtime();
@@ -1822,7 +1822,7 @@ function renderSuggestions(){
 function showView(v){
   currentView = v;
   activeChat = null;
-  document.body.classList.toggle('view-settings', v === 'settings' || v === 'pro');
+  document.body.classList.toggle('view-settings', v === 'settings' || v === 'pro' || v === 'approvals');
   const app = document.getElementById('app');
   app.classList.remove('full','wide');
   ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(function(id){
@@ -1837,6 +1837,7 @@ function showView(v){
   else if(v === 'profile'){ renderProfile(); markNav('nav-profile'); }
   else if(v === 'settings'){ renderSettings(); }
   else if(v === 'pro'){ renderPro(); }
+  else if(v === 'approvals'){ renderApprovals(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function markNav(id){
@@ -3330,10 +3331,13 @@ function renderPro(){
           + '<span class="pro-price">' + p.price + '</span>'
           + '<span class="pro-note">' + p.note + '</span></button>';
       }).join('') + '</div>')
+    + (myPaymentPending
+        ? '<div class="pay-pending">Payment sent - waiting for the owner to confirm.<br><span>UPI reference: ' + esc(myPaymentPending.utr || '') + '</span></div>'
+        : '')
     + (active
-        ? '<button class="ghost-btn" onclick="proRenew()">Renew or extend</button>'
-        : '<button class="share-btn" onclick="startPro()">Continue to payment</button>')
-    + '<div class="pro-note-small">Pay by UPI, card or netbanking. The payment is handled by Razorpay — Pulse never sees your card details.</div>'
+        ? '<button class="ghost-btn" onclick="openPaySheet()">Extend my Pro</button>'
+        : '<button class="share-btn" onclick="openPaySheet()">Continue to payment</button>')
+    + '<div class="pro-note-small">Pay by UPI (QR or your UPI app) - no card needed. Pro switches on as soon as the owner confirms your payment.</div>'
     + '</div>';
 }
 function loadRazorpay(){
@@ -3556,6 +3560,179 @@ function stRenderStoryTexts(items){
   stRenderInto(layer, items || [], false);
 }
 
+/* ---------------- Payments: UPI QR + owner approval ---------------- */
+var upiSettings = { upi_id: '', upi_name: 'Pulse' };
+var myPaymentPending = null;   // my newest claim that is still waiting
+var pendingPayments = [];      // owner: claims waiting for review
+
+async function loadSettings(){
+  try {
+    var q = await supa.from('app_settings').select('key,value');
+    if(!q.error && q.data){
+      q.data.forEach(function(r){
+        if(r.key === 'upi_id') upiSettings.upi_id = r.value || '';
+        if(r.key === 'upi_name') upiSettings.upi_name = r.value || 'Pulse';
+      });
+    }
+  } catch(e){}
+}
+async function loadPayments(){
+  try {
+    var q = await supa.from('payment_requests').select('*').order('created_at', { ascending: false }).limit(300);
+    var rows = q.error ? [] : (q.data || []);
+    myPaymentPending = null;
+    for(var i=0;i<rows.length;i++){
+      if(rows[i].user_id === me.id && rows[i].status === 'pending'){ myPaymentPending = rows[i]; break; }
+    }
+    pendingPayments = (me && me.is_admin) ? rows.filter(function(r){ return r.status === 'pending'; }) : [];
+  } catch(e){ myPaymentPending = null; pendingPayments = []; }
+}
+async function saveSetting(key, value){
+  if(!me || !me.is_admin){ toast('Only the owner can change this'); return false; }
+  try {
+    var r = await supa.rpc('set_setting', { k: key, v: value });
+    if(r.error){ toast('Could not save - run payments-upi.sql in Supabase first'); return false; }
+    if(key === 'upi_id') upiSettings.upi_id = value;
+    if(key === 'upi_name') upiSettings.upi_name = value;
+    return true;
+  } catch(e){ toast('Could not save'); return false; }
+}
+
+function upiAmount(plan){ return plan === 'pro_yearly' ? 799 : 99; }
+function upiRef(){ return 'PULSE-' + (me ? me.username : 'user'); }
+function upiLink(plan){
+  // the UPI id is kept as-is (a literal @ is what UPI apps expect);
+  // only the name and the note are URL-encoded
+  var pa = String(upiSettings.upi_id || '').trim();
+  var pn = String(upiSettings.upi_name || 'Pulse').trim();
+  return 'upi://pay?pa=' + pa +
+         '&pn=' + encodeURIComponent(pn) +
+         '&am=' + upiAmount(plan) + '.00&cu=INR&tn=' + encodeURIComponent(upiRef());
+}
+function copyUpi(){
+  if(navigator.clipboard){ navigator.clipboard.writeText(upiSettings.upi_id).then(function(){ toast('UPI ID copied'); }, function(){ toast(upiSettings.upi_id); }); }
+  else toast(upiSettings.upi_id);
+}
+function openUpiApp(){
+  try {
+    var a = document.createElement('a');
+    a.href = upiLink(proPlanChosen);
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Opening your UPI app - amount and note are filled in');
+  } catch(e){ toast('Open your UPI app and pay to ' + upiSettings.upi_id); }
+}
+function loadQrLib(){
+  return new Promise(function(resolve, reject){
+    if(window.qrcode) return resolve(true);
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+    s.onload = function(){ resolve(!!window.qrcode); };
+    s.onerror = function(){ reject(new Error('qr library could not load')); };
+    document.head.appendChild(s);
+  });
+}
+async function paintQr(){
+  var box = document.getElementById('pay-qr');
+  if(!box) return;
+  box.innerHTML = '<div class="pay-qr-note">Making your QR…</div>';
+  try {
+    await loadQrLib();
+    var qr = window.qrcode(0, 'M');
+    qr.addData(upiLink(proPlanChosen));
+    qr.make();
+    var url = null;
+    if(typeof qr.createDataURL === 'function') url = qr.createDataURL(6, 8);
+    else if(typeof qr.createImgTag === 'function') { box.innerHTML = qr.createImgTag(6, 8); return; }
+    if(url) box.innerHTML = '<img src="' + url + '" alt="UPI QR code">';
+    else box.innerHTML = '<div class="pay-qr-note">Pay to the UPI ID below and add the note.</div>';
+  } catch(e){
+    box.innerHTML = '<div class="pay-qr-note">QR could not be drawn here.<br>Pay to the UPI ID below and add the note.</div>';
+  }
+}
+function renderPaySheet(){
+  var el = document.getElementById('pay-body');
+  if(!el) return;
+  var amt = upiAmount(proPlanChosen);
+  el.innerHTML =
+    '<div class="pay-amount">₹' + amt + ' <span>' + (proPlanChosen === 'pro_yearly' ? 'for one year' : 'per month') + '</span></div>'
+    + '<div id="pay-qr" class="pay-qr"></div>'
+    + '<div class="pay-upi">UPI ID: <b>' + esc(upiSettings.upi_id) + '</b><button class="pay-copy" onclick="copyUpi()">Copy</button></div>'
+    + '<div class="pay-ref">Put this note in your payment app: <b>' + esc(upiRef()) + '</b></div>'
+    + '<button class="share-btn" onclick="openUpiApp()">Open my UPI app to pay</button>'
+    + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
+    + '<input id="pay-utr" placeholder="e.g. 405123456789">'
+    + '<button class="share-btn" onclick="submitUtr()">I have paid - send for approval</button>'
+    + '<button class="ghost-btn" onclick="closePaySheet();startPro()">Or pay by card / netbanking</button>'
+    + '<div class="pro-note-small">Pro switches on as soon as the owner confirms the payment.</div>';
+}
+function openPaySheet(){
+  if(!upiSettings.upi_id){ toast('The owner has not set a UPI ID yet'); return; }
+  document.getElementById('pay-sheet').classList.add('open');
+  renderPaySheet();
+  paintQr();
+}
+function closePaySheet(){ document.getElementById('pay-sheet').classList.remove('open'); }
+async function submitUtr(){
+  var utr = (document.getElementById('pay-utr').value || '').trim();
+  if(utr.length < 6){ toast('Please enter the UPI reference (UTR) number from your payment app'); return; }
+  try {
+    var r = await supa.rpc('submit_payment', { plan: proPlanChosen, utr: utr });
+    if(r.error){ toast('Could not send - run payments-upi.sql in Supabase first'); return; }
+    toast('Sent! The owner will confirm your payment');
+    closePaySheet();
+    await loadPayments();
+    renderPro();
+  } catch(e){ console.error(e); toast('Could not send'); }
+}
+
+/* owner: set the UPI ID the money goes to */
+function openPaymentSetup(){
+  document.getElementById('setup-upi-id').value = upiSettings.upi_id || '';
+  document.getElementById('setup-upi-name').value = upiSettings.upi_name || 'Pulse';
+  document.getElementById('pay-setup-modal').classList.add('open');
+}
+function closePaymentSetup(){ document.getElementById('pay-setup-modal').classList.remove('open'); }
+async function savePaymentSetup(){
+  var id = (document.getElementById('setup-upi-id').value || '').trim();
+  var nm = (document.getElementById('setup-upi-name').value || 'Pulse').trim();
+  if(id.indexOf('@') < 1){ toast('That does not look like a UPI ID (for example name@bank)'); return; }
+  var ok = await saveSetting('upi_id', id);
+  if(ok){ await saveSetting('upi_name', nm || 'Pulse'); toast('Saved - this is where payments will go'); closePaymentSetup(); }
+}
+
+/* owner: approve the payments that came in */
+async function renderApprovals(){
+  var col = document.getElementById('main-col');
+  col.innerHTML = '<div class="set-wrap"><div class="set-head">'
+    + '<button class="set-back" onclick="showView(\'settings\')" title="Back"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></button>'
+    + '<h2>Payments to approve</h2></div><div class="empty-note">Loading…</div></div>';
+  await loadPayments();
+  var rows = pendingPayments.map(function(r){
+    return '<div class="pay-req">'
+      + '<div class="pay-req-top"><b>@' + esc(r.username || 'user') + '</b><span>' + (r.plan === 'pro_yearly' ? 'Yearly · ₹799' : 'Monthly · ₹99') + '</span></div>'
+      + '<div class="pay-req-utr">UPI reference: <b>' + esc(r.utr || '') + '</b></div>'
+      + '<div class="pay-req-time">' + timeAgo(r.created_at) + '</div>'
+      + '<div class="pay-req-btns">'
+      + '<button class="pay-approve" onclick="reviewPayment(\'' + r.id + '\', true)">Approve</button>'
+      + '<button class="pay-reject" onclick="reviewPayment(\'' + r.id + '\', false)">Reject</button>'
+      + '</div></div>';
+  }).join('');
+  col.innerHTML = '<div class="set-wrap">'
+    + '<div class="set-head"><button class="set-back" onclick="showView(\'settings\')" title="Back"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Payments to approve</h2></div>'
+    + (rows ? rows : '<div class="empty-note">No payments waiting right now.</div>')
+    + '<div class="pro-note-small">Check the reference number in your bank / UPI app before approving. Approving switches Pro on for that person automatically.</div>'
+    + '</div>';
+}
+async function reviewPayment(id, approve){
+  try {
+    var r = await supa.rpc('review_payment', { req: id, approve: approve });
+    if(r.error){ toast('Could not update - run payments-upi.sql first'); return; }
+    toast(approve ? 'Approved - Pro is switched on' : 'Payment rejected');
+    await loadPayments();
+    renderApprovals();
+  } catch(e){ console.error(e); toast('Could not update'); }
+}
+
 /* ---------------- Settings ---------------- */
 function renderSettings(){
   var darkOn = document.documentElement.classList.contains('dark');
@@ -3572,6 +3749,7 @@ function renderSettings(){
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.4-3 8-7 9-4-1-7-4.6-7-9V6Z"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="1"/></svg>',
     star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8Z"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1"/></svg>',
     volume: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
     people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2"/><path d="M16.5 6.2a3.2 3.2 0 0 1 0 6.1"/><path d="M18 14.6c2 .6 3.5 2.2 3.5 4.9"/></svg>',
     out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13A1.5 1.5 0 0 1 18.5 20H15"/><path d="m10 8-4 4 4 4"/><path d="M6 12h9"/></svg>'
@@ -3601,6 +3779,8 @@ function renderSettings(){
       + '<button class="set-row" onclick="settingsNotifications()"><span class="ic">' + ic.bell + '</span><span class="lbl">Push notifications</span><span class="val">' + (pushOn ? 'On' : 'Off') + '</span><span class="chev">›</span></button>'
       + '<div class="set-row" style="cursor:default;"><span class="ic">' + ic.volume + '</span><span class="lbl">Sound volume</span><span class="val" id="vol-label">' + Math.round(audioVolume * 100) + '%</span><input id="vol-slider" type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" style="width:92px;margin-left:8px;flex-shrink:0;"></div>'
       + row(ic.people, 'Invite friends', 'openInvite()')
+      + (me.is_admin ? row(ic.star, 'Payment setup', 'openPaymentSetup()', upiSettings.upi_id ? 'UPI ready' : 'Needs setup') : '')
+      + (me.is_admin ? row(ic.wallet, 'Payments to approve', 'showView(\'approvals\')', pendingPayments.length ? (pendingPayments.length + ' waiting') : 'None') : '')
       + row(ic.down, 'Install app', 'installApp()')
       + row(ic.book, 'Saved posts', 'openSaved()')
     + '</div>'
@@ -3666,6 +3846,8 @@ document.addEventListener('keydown', function(e){
   else if(document.getElementById('pw-modal').classList.contains('open')) closeChangePassword();
   else if(document.getElementById('about-modal').classList.contains('open')) closeAbout();
   else if(document.getElementById('invite-modal').classList.contains('open')) closeInvite();
+  else if(document.getElementById('pay-sheet').classList.contains('open')) closePaySheet();
+  else if(document.getElementById('pay-setup-modal').classList.contains('open')) closePaymentSetup();
 });
 
 /* ---------------- Realtime ---------------- */
