@@ -3654,20 +3654,33 @@ function upiLink(plan){
   // only the name and the note are URL-encoded
   var pa = String(upiSettings.upi_id || '').trim();
   var pn = String(upiSettings.upi_name || 'Pulse').trim();
+  // tr = a unique reference for this payment attempt (some apps want it)
+  var tr = 'PULSE' + Date.now();
   return 'upi://pay?pa=' + pa +
          '&pn=' + encodeURIComponent(pn) +
-         '&am=' + upiAmount(plan) + '.00&cu=INR&tn=' + encodeURIComponent(upiRef());
+         '&am=' + upiAmount(plan) + '.00&cu=INR&tn=' + encodeURIComponent(upiRef()) +
+         '&tr=' + tr;
 }
 function copyUpi(){
   if(navigator.clipboard){ navigator.clipboard.writeText(upiSettings.upi_id).then(function(){ toast('UPI ID copied'); }, function(){ toast(upiSettings.upi_id); }); }
   else toast(upiSettings.upi_id);
 }
 function openUpiApp(){
+  var link = upiLink(proPlanChosen);
+  var target = link;
   try {
+    if(/android/i.test(navigator.userAgent || '')){
+      // On Android an intent:// URL makes the phone show the app chooser
+      // (PhonePe / Google Pay / FamPay / Paytm …) instead of jumping
+      // straight into one app.
+      var qs = link.indexOf('?') >= 0 ? link.split('?')[1] : '';
+      target = 'intent://pay?' + qs + '#Intent;scheme=upi;end';
+    }
     var a = document.createElement('a');
-    a.href = upiLink(proPlanChosen);
-    document.body.appendChild(a); a.click(); a.remove();
-    toast('Opening your UPI app - amount and note are filled in');
+    a.href = target;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ a.remove(); }, 1500);
+    toast('Pick your UPI app to pay ₹' + upiAmount(proPlanChosen));
   } catch(e){ toast('Open your UPI app and pay to ' + upiSettings.upi_id); }
 }
 function loadQrLib(){
@@ -3680,6 +3693,7 @@ function loadQrLib(){
     document.head.appendChild(s);
   });
 }
+var lastQrDataUrl = null;
 async function paintQr(){
   var box = document.getElementById('pay-qr');
   if(!box) return;
@@ -3692,22 +3706,43 @@ async function paintQr(){
     var url = null;
     if(typeof qr.createDataURL === 'function') url = qr.createDataURL(6, 8);
     else if(typeof qr.createImgTag === 'function') { box.innerHTML = qr.createImgTag(6, 8); return; }
-    if(url) box.innerHTML = '<img src="' + url + '" alt="UPI QR code">';
+    if(url){ lastQrDataUrl = url; box.innerHTML = '<img src="' + url + '" alt="UPI QR code">'; }
     else box.innerHTML = '<div class="pay-qr-note">Pay to the UPI ID below and add the note.</div>';
   } catch(e){
     box.innerHTML = '<div class="pay-qr-note">QR could not be drawn here.<br>Pay to the UPI ID below and add the note.</div>';
+  }
+}
+function downloadQr(){
+  if(!lastQrDataUrl){ toast('The QR is still loading - try again in a second'); return; }
+  try {
+    var a = document.createElement('a');
+    a.href = lastQrDataUrl;
+    a.download = 'pulse-upi-qr.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('QR saved - open your UPI app, tap Scan QR, and pick it from the gallery');
+  } catch(e){
+    toast('Long-press the QR image and choose Save image instead');
   }
 }
 function renderPaySheet(){
   var el = document.getElementById('pay-body');
   if(!el) return;
   var amt = upiAmount(proPlanChosen);
+  var lbl = proPlanChosen === 'pro_yearly' ? 'for one year' : (proPlanChosen === 'pro_trial' ? 'for 1 day (trial)' : 'per month');
   el.innerHTML =
-    '<div class="pay-amount">₹' + amt + ' <span>' + (proPlanChosen === 'pro_yearly' ? 'for one year' : (proPlanChosen === 'pro_trial' ? 'for 1 day (trial)' : 'per month')) + '</span></div>'
+    '<div class="pay-amount">₹' + amt + ' <span>' + lbl + '</span></div>'
+    + '<div class="pay-qr-head">Pay ₹' + amt + ' to ' + esc(upiSettings.upi_id) + '</div>'
     + '<div id="pay-qr" class="pay-qr"></div>'
+    + '<div class="pay-steps">'
+      + '<div class="pay-step"><b>1.</b> Open any UPI app (PhonePe, Google Pay, FamPay…).</div>'
+      + '<div class="pay-step"><b>2.</b> Tap <b>Scan QR</b> and point the camera at the code above — or tap "Save QR" and choose it from the gallery.</div>'
+      + '<div class="pay-step"><b>3.</b> Check the name shows <b>' + esc(upiSettings.upi_name || 'Pulse') + '</b>, pay ₹' + amt + ', and put <b>' + esc(upiRef()) + '</b> in the note.</div>'
+    + '</div>'
+    + '<button class="ghost-btn pay-mini" onclick="downloadQr()">Save QR to my gallery</button>'
     + '<div class="pay-upi">UPI ID: <b>' + esc(upiSettings.upi_id) + '</b><button class="pay-copy" onclick="copyUpi()">Copy</button></div>'
-    + '<div class="pay-ref">Put this note in your payment app: <b>' + esc(upiRef()) + '</b></div>'
-    + '<button class="share-btn" onclick="openUpiApp()">Open my UPI app to pay</button>'
+    + '<div class="pay-alt">QR not scanning? Tap <b>Copy</b>, then in your UPI app choose <b>Pay to UPI ID</b> and paste it. That always works.</div>'
+    + '<button class="ghost-btn pay-mini" onclick="openUpiApp()">Try opening a UPI app directly</button>'
+    + '<div class="pay-alt">Note: Google Pay and PhonePe often block direct links to a personal UPI ID (not a Pulse problem). If the payment is declined, use the QR or paste the UPI ID instead.</div>'
     + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
     + '<input id="pay-utr" placeholder="e.g. 405123456789">'
     + '<button class="share-btn" onclick="submitUtr()">I have paid - send for approval</button>'
