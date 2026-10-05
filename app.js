@@ -3820,9 +3820,8 @@ function renderPaySheet(){
     + '<button class="ghost-btn pay-mini" onclick="sharePayLink()">Share payment link (WhatsApp, etc.)</button>'
     + '<button class="ghost-btn pay-mini" onclick="copyPayLink()">Copy the payment link</button>'
     + '<div class="pay-alt">QR not scanning? Tap <b>Copy</b>, then in your UPI app choose <b>Pay to UPI ID</b> and paste it. That always works.</div>'
-    + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
-    + '<input id="pay-utr" placeholder="e.g. 405123456789">'
-    + '<button class="share-btn" onclick="submitUtr()">I have paid - send for approval</button>'
+    + '<div class="pay-alt" style="margin-top:14px;">Paid already? Just tap the button below - nothing to type. The owner sees your payment in their UPI app (your note is <b>' + esc(upiRef()) + '</b>) and switches Pro on.</div>'
+    + '<button class="share-btn" onclick="submitPaid()">I have paid - switch Pro on</button>'
     + (proPlanChosen === 'pro_trial' ? '' : '<button class="ghost-btn" onclick="closePaySheet();startPro()">Or pay by card / netbanking</button>')
     + '<div class="pro-note-small">Pro switches on as soon as the owner confirms the payment.</div>';
 }
@@ -3833,13 +3832,14 @@ function openPaySheet(){
   paintQr();
 }
 function closePaySheet(){ document.getElementById('pay-sheet').classList.remove('open'); }
-async function submitUtr(){
-  var utr = (document.getElementById('pay-utr').value || '').trim();
-  if(utr.length < 6){ toast('Please enter the UPI reference (UTR) number from your payment app'); return; }
+/* no reference to type: the payment note (PULSE-<username>) is the
+   reference the owner looks for in their UPI app. */
+async function submitPaid(){
+  if(!me) return;
   try {
-    var r = await supa.rpc('submit_payment', { plan: proPlanChosen, utr: utr });
+    var r = await supa.rpc('submit_payment', { plan: proPlanChosen, utr: upiRef() });
     if(r.error){ toast('Could not send - run payments-upi.sql in Supabase first'); return; }
-    toast('Sent! The owner will confirm your payment');
+    toast('Sent! The owner will check and switch Pro on');
     closePaySheet();
     await loadPayments();
     renderPro();
@@ -3916,7 +3916,7 @@ async function renderApprovals(){
   var rows = pendingPayments.map(function(r){
     return '<div class="pay-req">'
       + '<div class="pay-req-top"><b>@' + esc(r.username || 'user') + '</b><span>' + (r.plan === 'pro_yearly' ? 'Yearly · ₹799' : (r.plan === 'pro_trial' ? 'Trial · ₹1' : 'Monthly · ₹99')) + '</span></div>'
-      + '<div class="pay-req-utr">UPI reference: <b>' + esc(r.utr || '') + '</b></div>'
+      + '<div class="pay-req-utr">Look for this note in your UPI app: <b>' + esc(r.utr || '') + '</b></div>'
       + '<div class="pay-req-time">' + timeAgo(r.created_at) + '</div>'
       + '<div class="pay-req-btns">'
       + '<button class="pay-approve" onclick="reviewPayment(\'' + r.id + '\', true)">Approve</button>'
