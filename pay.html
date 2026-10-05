@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0d">
+<title>Pay with UPI · Pulse</title>
+<style>
+  :root{--bg:#f4f4f6;--surface:#fff;--text:#111114;--soft:#6b6b72;--border:#e3e3e8;--accent:#0095F6;}
+  @media (prefers-color-scheme: dark){:root{--bg:#0b0b0d;--surface:#151517;--text:#f2f2f4;--soft:#9a9aa2;--border:#2a2a2e;}}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;display:flex;justify-content:center;padding:18px 14px 44px;}
+  .wrap{width:100%;max-width:420px;}
+  .brand{display:flex;align-items:center;justify-content:center;gap:9px;margin:2px 0 18px;}
+  .dot{width:26px;height:26px;border-radius:9px;background:linear-gradient(45deg,#f9ce34,#ee2a7b 45%,#6228d7 70%,#3b6ee0);}
+  .brand b{font-size:17px;letter-spacing:.2px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 16px;}
+  .amt{font-size:31px;font-weight:800;text-align:center;letter-spacing:-.6px;line-height:1.15;}
+  .amt small{display:block;font-size:12.5px;font-weight:500;color:var(--soft);margin-top:5px;letter-spacing:0;}
+  .apps-head{font-size:13.5px;font-weight:600;text-align:center;margin:18px 0 9px;}
+  .apps{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .app{display:flex;align-items:center;gap:9px;border:1px solid var(--border);background:var(--surface);border-radius:11px;padding:11px 10px;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;text-align:left;}
+  .app:active{transform:scale(.98);}
+  .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0;}
+  .or{font-size:12px;color:var(--soft);text-align:center;margin:16px 0 9px;}
+  .qr{display:flex;align-items:center;justify-content:center;min-height:222px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:8px;cursor:pointer;}
+  .qr:active{opacity:.92;}
+  .qr img{width:210px;height:210px;display:block;}
+  .qnote{font-size:12px;color:#666;text-align:center;line-height:1.5;padding:0 12px;}
+  .save{width:100%;margin-top:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:11px;padding:11px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+  .upi{margin-top:12px;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+  .copy{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;padding:5px 11px;font-family:inherit;font-size:12px;cursor:pointer;}
+  .tip{font-size:11.5px;color:var(--soft);text-align:center;line-height:1.55;margin-top:12px;}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111;color:#fff;font-size:13px;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90%;text-align:center;}
+  .toast.on{opacity:.95;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="dot"></span><b>Pulse</b></div>
+  <div class="card">
+    <div class="amt" id="amt">Loading…</div>
+    <div class="apps-head" id="appsHead">Tap your UPI app to pay</div>
+    <div class="apps" id="apps"></div>
+    <div class="or">or scan the QR</div>
+    <div class="qr" id="qr" onclick="openChooser()"><div class="qnote">Making your QR…</div></div>
+    <button class="save" onclick="saveQr()">Save QR to my gallery</button>
+    <div class="upi">UPI ID: <b id="upid">…</b><button class="copy" onclick="copyUpi()">Copy</button></div>
+    <div class="tip" id="tip">Tapping an app opens it with the payee and amount already filled in, so you just enter your PIN.</div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+var SUPABASE_URL = 'https://mvbojueciwemmjohxvyh.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12Ym9qdWVjaXdlbW1qb2h4dnloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNDQxOTA2LCJleHAiOjIxMDYwMTc5MDZ9.uJCHxZXvJOXZ9fO70bu4sTa0VP94DKf0jSncAEKpm2Q';
+var FALLBACK_UPI = '8930870056@fam';
+var FALLBACK_NAME = 'Pulse';
+
+var APPS = [
+  { k:'phonepe', name:'PhonePe',    scheme:'phonepe://pay?',       color:'#5F259F', letter:'Pe' },
+  { k:'gpay',    name:'Google Pay', scheme:'tez://upi/pay?',       color:'#1A73E8', letter:'G'  },
+  { k:'fampay',  name:'FamPay',     scheme:'in.fampay.app://pay?', color:'#00B96B', letter:'F'  },
+  { k:'paytm',   name:'Paytm',      scheme:'paytmmp://pay?',       color:'#00BAF2', letter:'P'  }
+];
+
+var params = new URLSearchParams(location.search);
+var amount = (params.get('amt') || '').replace(/[^0-9.]/g, '');
+var note   = (params.get('tn') || '').slice(0, 40);
+var upi = FALLBACK_UPI, payeeName = FALLBACK_NAME;
+var qrData = null;
+var TR = 'PULSE' + Date.now();
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('on'); }, 2600);
+}
+function upiQuery(){
+  var q = 'pa=' + upi + '&pn=' + encodeURIComponent(payeeName) + '&cu=INR';
+  if(amount) q += '&am=' + amount;
+  if(note)   q += '&tn=' + encodeURIComponent(note);
+  q += '&tr=' + TR;
+  return q;
+}
+function genericLink(){ return 'upi://pay?' + upiQuery(); }
+function launch(url){
+  try {
+    var a = document.createElement('a');
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ a.remove(); }, 1200);
+    return true;
+  } catch(e){ return false; }
+}
+function openChooser(){ launch(genericLink()); toast('Choose your UPI app'); }
+function openApp(k){
+  var app = null;
+  for(var i = 0; i < APPS.length; i++){ if(APPS[i].k === k) app = APPS[i]; }
+  if(!app) return;
+  var t0 = Date.now(), away = false;
+  var onHide = function(){ if(document.visibilityState === 'hidden') away = true; };
+  document.addEventListener('visibilitychange', onHide);
+  launch(app.scheme + upiQuery());
+  toast('Opening ' + app.name + '…');
+  setTimeout(function(){
+    document.removeEventListener('visibilitychange', onHide);
+    if(!away && document.visibilityState === 'visible' && Date.now() - t0 < 5000){
+      launch(genericLink());
+      toast('Could not open ' + app.name + ' - showing your UPI apps instead');
+    }
+  }, 1400);
+}
+function copyUpi(){
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(upi).then(function(){ toast('UPI ID copied'); }, function(){ toast(upi); });
+  } else { toast(upi); }
+}
+function saveQr(){
+  if(!qrData){ toast('The QR is still loading - try again in a second'); return; }
+  try {
+    var a = document.createElement('a');
+    a.href = qrData; a.download = 'pulse-upi-qr.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('QR saved - in your UPI app tap Scan QR and pick it from the gallery');
+  } catch(e){ toast('Long-press the QR image and choose Save image'); }
+}
+function drawQr(){
+  var box = document.getElementById('qr');
+  try {
+    var qr = window.qrcode(0, 'M');
+    qr.addData(genericLink());
+    qr.make();
+    var url = qr.createDataURL(6, 8);
+    qrData = url;
+    box.innerHTML = '<img src="' + url + '" alt="UPI QR code">';
+  } catch(e){
+    box.innerHTML = '<div class="qnote">QR could not be drawn here.<br>Pay to the UPI ID below instead.</div>';
+  }
+}
+function paint(){
+  document.getElementById('upid').textContent = upi;
+  var sub = note ? ('note: ' + esc(note)) : ('to ' + esc(payeeName));
+  document.getElementById('amt').innerHTML = (amount ? ('₹' + esc(amount)) : 'Pay') + '<small>' + sub + '</small>';
+  document.getElementById('appsHead').textContent = amount ? ('Tap your UPI app to pay ₹' + amount) : 'Tap your UPI app to pay';
+  document.getElementById('apps').innerHTML =
+    APPS.map(function(app){
+      return '<button class="app" onclick="openApp(\'' + app.k + '\')">'
+        + '<span class="ic" style="background:' + app.color + '">' + app.letter + '</span>' + app.name + '</button>';
+    }).join('')
+    + '<button class="app" onclick="openChooser()"><span class="ic" style="background:#6B7280">…</span>Other apps</button>';
+  drawQr();
+}
+/* draw straight away with the built-in UPI id, then quietly upgrade to
+   whatever the owner has saved - so the page never sits on "Loading…" */
+function init(){
+  paint();
+  loadSettings();
+}
+async function loadSettings(){
+  try {
+    if(!window.supabase) return;
+    var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    var timeout = new Promise(function(res){ setTimeout(function(){ res(null); }, 3000); });
+    var r = await Promise.race([ client.from('app_settings').select('key,value'), timeout ]);
+    if(r && !r.error && r.data){
+      var changed = false;
+      r.data.forEach(function(row){
+        if(row.key === 'upi_id' && row.value && row.value !== upi){ upi = row.value; changed = true; }
+        if(row.key === 'upi_name' && row.value && row.value !== payeeName){ payeeName = row.value; changed = true; }
+      });
+      if(changed) paint();
+    }
+  } catch(e){ /* offline - the built-in UPI id stays */ }
+}
+init();
+</script>
+</body>
+</html>

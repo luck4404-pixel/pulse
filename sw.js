@@ -54,7 +54,8 @@ self.addEventListener('fetch', function(e){
   if(url.origin === location.origin){
     // app shell (page + code): network first so updates arrive instantly, cache when offline
     var isShell = url.pathname === '/' || url.pathname.indexOf('.') === -1 ||
-                  url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js');
+                  url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js') ||
+                  url.pathname.endsWith('/pay.html');
     if(isShell){
       e.respondWith(
         fetch(e.request, { cache: 'no-cache' }).then(function(res){ cachePut(e.request, res); return res; })

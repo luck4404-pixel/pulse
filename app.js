@@ -3665,6 +3665,20 @@ function copyUpi(){
   if(navigator.clipboard){ navigator.clipboard.writeText(upiSettings.upi_id).then(function(){ toast('UPI ID copied'); }, function(){ toast(upiSettings.upi_id); }); }
   else toast(upiSettings.upi_id);
 }
+/* a shareable https payment link: tapping it opens the pay page,
+   which then hands the payment to the payer's UPI app. */
+function payLink(){
+  return 'https://luck4404-pixel.github.io/pulse/pay.html?amt=' + upiAmount(proPlanChosen) +
+         '&tn=' + encodeURIComponent(upiRef());
+}
+function copyPayLink(){
+  var link = payLink();
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(link).then(
+      function(){ toast('Payment link copied - send it to anyone; tapping it lets them pay'); },
+      function(){ toast(link); });
+  } else toast(link);
+}
 function openUpiApp(){
   launchUpiUrl(upiLink(proPlanChosen));
   toast('Choose your UPI app to pay ₹' + upiAmount(proPlanChosen));
@@ -3791,6 +3805,7 @@ function renderPaySheet(){
     + '</div>'
     + '<button class="ghost-btn pay-mini" onclick="downloadQr()">Save QR to my gallery</button>'
     + '<div class="pay-upi">UPI ID: <b>' + esc(upiSettings.upi_id) + '</b><button class="pay-copy" onclick="copyUpi()">Copy</button></div>'
+    + '<button class="ghost-btn pay-mini" onclick="copyPayLink()">Copy a payment link to share</button>'
     + '<div class="pay-alt">QR not scanning? Tap <b>Copy</b>, then in your UPI app choose <b>Pay to UPI ID</b> and paste it. That always works.</div>'
     + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
     + '<input id="pay-utr" placeholder="e.g. 405123456789">'
