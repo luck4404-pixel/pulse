@@ -3293,12 +3293,14 @@ function proName(username, isProUser){
 }
 function ringClass(isProUser){ return isProUser ? ' pro-ring' : ''; }
 
+/* the scalloped "seal" badge (like Instagram's verified tick) */
+var SEAL_PETALS = '<circle cx="12.00" cy="4.45" r="3.15"/><circle cx="15.77" cy="5.46" r="3.15"/><circle cx="18.54" cy="8.22" r="3.15"/><circle cx="19.55" cy="12.00" r="3.15"/><circle cx="18.54" cy="15.77" r="3.15"/><circle cx="15.77" cy="18.54" r="3.15"/><circle cx="12.00" cy="19.55" r="3.15"/><circle cx="8.23" cy="18.54" r="3.15"/><circle cx="5.46" cy="15.78" r="3.15"/><circle cx="4.45" cy="12.00" r="3.15"/><circle cx="5.46" cy="8.22" r="3.15"/><circle cx="8.22" cy="5.46" r="3.15"/><circle cx="12.00" cy="12.00" r="5.44"/>';
 function tickHtml(level){
   var fill = level === 'blue' ? '#0095F6' : '#E0A32E';
   var label = level === 'blue' ? 'Verified' : 'Pulse Pro';
   return '<span class="tick" title="' + label + '" aria-label="' + label + '">'
-    + '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="' + fill + '"/>'
-    + '<path d="m7.6 12.3 3 3 5.8-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '<svg viewBox="0 0 24 24"><g fill="' + fill + '">' + SEAL_PETALS + '</g>'
+    + '<path d="m7.7 12.3 3.05 3.05 5.9-6.1" fill="none" stroke="#fff" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     + '</span>';
 }
 /* blue tick = given by the owner by hand;  gold tick = a Pro subscriber */
