@@ -3666,22 +3666,8 @@ function copyUpi(){
   else toast(upiSettings.upi_id);
 }
 function openUpiApp(){
-  var link = upiLink(proPlanChosen);
-  var target = link;
-  try {
-    if(/android/i.test(navigator.userAgent || '')){
-      // On Android an intent:// URL makes the phone show the app chooser
-      // (PhonePe / Google Pay / FamPay / Paytm …) instead of jumping
-      // straight into one app.
-      var qs = link.indexOf('?') >= 0 ? link.split('?')[1] : '';
-      target = 'intent://pay?' + qs + '#Intent;scheme=upi;end';
-    }
-    var a = document.createElement('a');
-    a.href = target;
-    document.body.appendChild(a); a.click();
-    setTimeout(function(){ a.remove(); }, 1500);
-    toast('Pick your UPI app to pay ₹' + upiAmount(proPlanChosen));
-  } catch(e){ toast('Open your UPI app and pay to ' + upiSettings.upi_id); }
+  launchUpiUrl(upiLink(proPlanChosen));
+  toast('Choose your UPI app to pay ₹' + upiAmount(proPlanChosen));
 }
 function loadQrLib(){
   return new Promise(function(resolve, reject){
@@ -3699,41 +3685,52 @@ var lastQrDataUrl = null;
    pkg = the app's Android package name; Android uses it to open that
    exact app, and to send the user to the Play Store if it is missing. */
 var UPI_APPS = [
-  { k:'phonepe', name:'PhonePe',    pkg:'com.phonepe.app',                     color:'#5F259F', letter:'Pe' },
-  { k:'gpay',    name:'Google Pay', pkg:'com.google.android.apps.nbu.paisa.user', color:'#1A73E8', letter:'G'  },
-  { k:'fampay',  name:'FamPay',     pkg:'com.fampay.in',                       color:'#00B96B', letter:'F'  },
-  { k:'paytm',   name:'Paytm',      pkg:'net.one97.paytm',                     color:'#00BAF2', letter:'P'  }
+  { k:'phonepe', name:'PhonePe',    scheme:'phonepe://pay?',        color:'#5F259F', letter:'Pe' },
+  { k:'gpay',    name:'Google Pay', scheme:'tez://upi/pay?',        color:'#1A73E8', letter:'G'  },
+  { k:'fampay',  name:'FamPay',     scheme:'in.fampay.app://pay?',  color:'#00B96B', letter:'F'  },
+  { k:'paytm',   name:'Paytm',      scheme:'paytmmp://pay?',        color:'#00BAF2', letter:'P'  }
 ];
 function upiQs(plan){
   var link = upiLink(plan);
   return link.indexOf('?') >= 0 ? link.split('?')[1] : '';
 }
-/* open one specific UPI app, with the amount + note already filled in */
+/* fire a link at the phone. The OS hands it to whichever app owns
+   that scheme - this works from a normal browser AND from the
+   installed app (an intent:// link does not, which is why the
+   earlier attempt opened a dead page). */
+function launchUpiUrl(url){
+  try {
+    var a = document.createElement('a');
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ a.remove(); }, 1200);
+    return true;
+  } catch(e){ return false; }
+}
+/* open one specific UPI app, with the amount + note already filled in.
+   Each app has its own scheme (tez, phonepe, paytmmp, ...). If that
+   app is not on the phone the link does nothing, so after a moment we
+   fall back to the normal UPI link - the phone then shows its own
+   list of the UPI apps that ARE installed. */
 function openUpiForApp(k){
   var app = null;
   for(var i = 0; i < UPI_APPS.length; i++){ if(UPI_APPS[i].k === k) app = UPI_APPS[i]; }
   if(!app) return;
-  var link = upiLink(proPlanChosen);
-  var target;
-  try {
-    if(/android/i.test(navigator.userAgent || '')){
-      // Android: target this exact app. If it is not installed, Android
-      // opens the Play Store page instead of showing a dead error.
-      var store = 'https://play.google.com/store/apps/details?id=' + app.pkg;
-      target = 'intent://pay?' + upiQs(proPlanChosen) +
-               '#Intent;scheme=upi;package=' + app.pkg +
-               ';S.browser_fallback_url=' + encodeURIComponent(store) + ';end';
-    } else {
-      // iPhone and others: UPI apps share one scheme, so the phone
-      // shows its own chooser.
-      target = link;
+  var qs = upiQs(proPlanChosen);
+  var t0 = Date.now();
+  var wentAway = false;
+  var onHide = function(){ if(document.visibilityState === 'hidden') wentAway = true; };
+  document.addEventListener('visibilitychange', onHide);
+  launchUpiUrl(app.scheme + qs);
+  toast('Opening ' + app.name + ' - amount and note are filled in');
+  setTimeout(function(){
+    document.removeEventListener('visibilitychange', onHide);
+    if(!wentAway && document.visibilityState === 'visible' && Date.now() - t0 < 5000){
+      launchUpiUrl('upi://pay?' + qs);
+      toast('Could not open ' + app.name + ' - showing your UPI apps instead');
     }
-    var a = document.createElement('a');
-    a.href = target;
-    document.body.appendChild(a); a.click();
-    setTimeout(function(){ a.remove(); }, 1500);
-    toast('Opening ' + app.name + ' - amount and note are filled in');
-  } catch(e){ toast('Open ' + app.name + ' and pay to ' + upiSettings.upi_id); }
+  }, 1400);
 }
 async function paintQr(){
   var box = document.getElementById('pay-qr');
