@@ -3272,6 +3272,8 @@ var PRO_PLANS = [
   { k: 'pro_monthly', price: '₹99',  note: 'per month' },
   { k: 'pro_yearly',  price: '₹799', note: 'per year · save 33%', best: true }
 ];
+/* limited-time ₹1 trial: unlocks every Pro feature for 1 day so people can try it */
+var PRO_TRIAL = { k: 'pro_trial', price: '₹1', note: 'Every Pro feature, for 1 day — just to try' };
 async function loadPro(){
   try {
     var q = await supa.from('subscriptions').select('plan,status,current_period_end').eq('user_id', me.id).maybeSingle();
@@ -3363,7 +3365,10 @@ function renderPro(){
           + (p.best ? '<span class="pro-tag">BEST VALUE</span>' : '')
           + '<span class="pro-price">' + p.price + '</span>'
           + '<span class="pro-note">' + p.note + '</span></button>';
-      }).join('') + '</div>')
+      }).join('') + '</div>'
+        + '<button class="pro-trial-btn' + (proPlanChosen === PRO_TRIAL.k ? ' on' : '') + '" onclick="proPick(\'' + PRO_TRIAL.k + '\')">'
+        + '<span class="pt-left"><b>' + PRO_TRIAL.price + ' trial</b><span>' + PRO_TRIAL.note + '</span></span>'
+        + '<span class="pt-tag">LIMITED OFFER</span></button>')
     + (myPaymentPending
         ? '<div class="pay-pending">Payment sent - waiting for the owner to confirm.<br><span>UPI reference: ' + esc(myPaymentPending.utr || '') + '</span></div>'
         : '')
@@ -3642,7 +3647,7 @@ async function saveSetting(key, value){
   } catch(e){ toast('Could not save'); return false; }
 }
 
-function upiAmount(plan){ return plan === 'pro_yearly' ? 799 : 99; }
+function upiAmount(plan){ return plan === 'pro_trial' ? 1 : (plan === 'pro_yearly' ? 799 : 99); }
 function upiRef(){ return 'PULSE-' + (me ? me.username : 'user'); }
 function upiLink(plan){
   // the UPI id is kept as-is (a literal @ is what UPI apps expect);
@@ -3698,7 +3703,7 @@ function renderPaySheet(){
   if(!el) return;
   var amt = upiAmount(proPlanChosen);
   el.innerHTML =
-    '<div class="pay-amount">₹' + amt + ' <span>' + (proPlanChosen === 'pro_yearly' ? 'for one year' : 'per month') + '</span></div>'
+    '<div class="pay-amount">₹' + amt + ' <span>' + (proPlanChosen === 'pro_yearly' ? 'for one year' : (proPlanChosen === 'pro_trial' ? 'for 1 day (trial)' : 'per month')) + '</span></div>'
     + '<div id="pay-qr" class="pay-qr"></div>'
     + '<div class="pay-upi">UPI ID: <b>' + esc(upiSettings.upi_id) + '</b><button class="pay-copy" onclick="copyUpi()">Copy</button></div>'
     + '<div class="pay-ref">Put this note in your payment app: <b>' + esc(upiRef()) + '</b></div>'
@@ -3706,7 +3711,7 @@ function renderPaySheet(){
     + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
     + '<input id="pay-utr" placeholder="e.g. 405123456789">'
     + '<button class="share-btn" onclick="submitUtr()">I have paid - send for approval</button>'
-    + '<button class="ghost-btn" onclick="closePaySheet();startPro()">Or pay by card / netbanking</button>'
+    + (proPlanChosen === 'pro_trial' ? '' : '<button class="ghost-btn" onclick="closePaySheet();startPro()">Or pay by card / netbanking</button>')
     + '<div class="pro-note-small">Pro switches on as soon as the owner confirms the payment.</div>';
 }
 function openPaySheet(){
@@ -3798,7 +3803,7 @@ async function renderApprovals(){
   await loadPayments();
   var rows = pendingPayments.map(function(r){
     return '<div class="pay-req">'
-      + '<div class="pay-req-top"><b>@' + esc(r.username || 'user') + '</b><span>' + (r.plan === 'pro_yearly' ? 'Yearly · ₹799' : 'Monthly · ₹99') + '</span></div>'
+      + '<div class="pay-req-top"><b>@' + esc(r.username || 'user') + '</b><span>' + (r.plan === 'pro_yearly' ? 'Yearly · ₹799' : (r.plan === 'pro_trial' ? 'Trial · ₹1' : 'Monthly · ₹99')) + '</span></div>'
       + '<div class="pay-req-utr">UPI reference: <b>' + esc(r.utr || '') + '</b></div>'
       + '<div class="pay-req-time">' + timeAgo(r.created_at) + '</div>'
       + '<div class="pay-req-btns">'

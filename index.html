@@ -734,6 +734,12 @@
   .pro-note{font-size:11.5px;color:var(--text-soft);text-align:center;}
   .pro-tag{position:absolute;top:-9px;background:var(--accent-b);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.5px;}
   .pro-note-small{font-size:11.5px;color:var(--text-soft);text-align:center;line-height:1.5;margin-top:12px;}
+  .pro-trial-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:2px dashed var(--border);background:var(--surface);border-radius:12px;padding:13px 14px;font-family:inherit;cursor:pointer;color:var(--text);margin-bottom:14px;text-align:left;}
+  .pro-trial-btn.on{border-style:solid;border-color:#1DB954;}
+  .pro-trial-btn .pt-left{display:flex;flex-direction:column;align-items:flex-start;gap:2px;}
+  .pro-trial-btn .pt-left b{font-size:15px;}
+  .pro-trial-btn .pt-left span{font-size:11.5px;color:var(--text-soft);}
+  .pt-tag{background:#1DB954;color:#fff;font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;letter-spacing:.5px;flex-shrink:0;}
 
   /* ---------- Text on stories ---------- */
   #story-text-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
@@ -1315,6 +1321,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=53"></script>
+<script src="app.js?v=54"></script>
 </body>
 </html>

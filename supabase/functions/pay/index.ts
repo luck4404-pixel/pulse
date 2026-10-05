@@ -11,6 +11,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const PLANS: Record<string, { amount: number; days: number }> = {
   pro_monthly: { amount: 9900,  days: 30 },   // ₹99
   pro_yearly:  { amount: 79900, days: 365 },  // ₹799
+  pro_trial:   { amount: 100,   days: 1 },    // ₹1 limited-time trial
 };
 
 const CORS = {
