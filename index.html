@@ -678,7 +678,11 @@
   .pay-copy{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer;}
   .pay-ref{font-size:12.5px;color:var(--text-soft);text-align:center;margin-bottom:12px;}
   .pay-ref b{color:var(--accent-d);}
-  .pay-qr-head{font-size:13px;font-weight:600;text-align:center;margin-bottom:10px;}
+  .payee-card{display:flex;align-items:center;gap:11px;background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:11px 13px;margin-bottom:13px;}
+  .payee-av{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f9ce34,#ee2a7b 50%,#6228d7);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0;}
+  .payee-info{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .payee-info b{font-size:15px;}
+  .payee-info span{font-size:12.5px;color:var(--text-soft);word-break:break-all;}
   .pay-steps{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:10px;display:flex;flex-direction:column;gap:7px;}
   .pay-step{font-size:12.5px;line-height:1.45;color:var(--text-soft);}
   .pay-step b{color:var(--text);}
@@ -1334,6 +1338,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=60"></script>
+<script src="app.js?v=61"></script>
 </body>
 </html>

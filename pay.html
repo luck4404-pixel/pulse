@@ -15,6 +15,11 @@
   .dot{width:26px;height:26px;border-radius:9px;background:linear-gradient(45deg,#f9ce34,#ee2a7b 45%,#6228d7 70%,#3b6ee0);}
   .brand b{font-size:17px;letter-spacing:.2px;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 16px;}
+  .payee{display:flex;align-items:center;gap:11px;background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:11px 13px;margin-bottom:14px;}
+  .pav{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f9ce34,#ee2a7b 50%,#6228d7);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0;}
+  .pinfo{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .pinfo b{font-size:15px;}
+  .pinfo span{font-size:12.5px;color:var(--soft);word-break:break-all;}
   .amt{font-size:31px;font-weight:800;text-align:center;letter-spacing:-.6px;line-height:1.15;}
   .amt small{display:block;font-size:12.5px;font-weight:500;color:var(--soft);margin-top:5px;letter-spacing:0;}
   .apps-head{font-size:13.5px;font-weight:600;text-align:center;margin:18px 0 9px;}
@@ -23,9 +28,9 @@
   .app:active{transform:scale(.98);}
   .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0;}
   .or{font-size:12px;color:var(--soft);text-align:center;margin:16px 0 9px;}
-  .qr{display:flex;align-items:center;justify-content:center;min-height:222px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:8px;cursor:pointer;}
+  .qr{display:flex;align-items:center;justify-content:center;min-height:248px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:8px;cursor:pointer;}
   .qr:active{opacity:.92;}
-  .qr img{width:210px;height:210px;display:block;}
+  .qr img{width:232px;height:232px;display:block;}
   .qnote{font-size:12px;color:#666;text-align:center;line-height:1.5;padding:0 12px;}
   .save{width:100%;margin-top:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:11px;padding:11px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
   .upi{margin-top:12px;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
@@ -39,12 +44,17 @@
 <div class="wrap">
   <div class="brand"><span class="dot"></span><b>Pulse</b></div>
   <div class="card">
+    <div class="payee">
+      <div class="pav" id="pav">P</div>
+      <div class="pinfo"><b id="pname">Pulse</b><span id="pupi">…</span></div>
+    </div>
     <div class="amt" id="amt">Loading…</div>
     <div class="apps-head" id="appsHead">Tap your UPI app to pay</div>
     <div class="apps" id="apps"></div>
-    <div class="or">or scan the QR</div>
+    <div class="or" id="orLine">or scan the QR</div>
     <div class="qr" id="qr" onclick="openChooser()"><div class="qnote">Making your QR…</div></div>
     <button class="save" onclick="saveQr()">Save QR to my gallery</button>
+    <button class="save" onclick="shareLink()">Share this payment link</button>
     <div class="upi">UPI ID: <b id="upid">…</b><button class="copy" onclick="copyUpi()">Copy</button></div>
     <div class="tip" id="tip">Tapping an app opens it with the payee and amount already filled in, so you just enter your PIN.</div>
   </div>
@@ -72,6 +82,8 @@ var note   = (params.get('tn') || '').slice(0, 40);
 var upi = FALLBACK_UPI, payeeName = FALLBACK_NAME;
 var qrData = null;
 var TR = 'PULSE' + Date.now();
+var IS_TOUCH = (navigator.maxTouchPoints > 0) || ('ontouchstart' in window) ||
+               /Android|iPhone|iPad|iPod|Mobile|Windows Phone|Opera Mini/i.test(navigator.userAgent);
 
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
 function toast(msg){
@@ -115,6 +127,15 @@ function openApp(k){
     }
   }, 1400);
 }
+function shareLink(){
+  var url = location.href;
+  var label = amount ? ('Pay ₹' + amount + ' with UPI') : 'Pay with UPI';
+  if(navigator.share){
+    navigator.share({ title: 'Pulse', text: label, url: url }).catch(function(){});
+  } else if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(function(){ toast('Payment link copied'); }, function(){ toast(url); });
+  } else { toast(url); }
+}
 function copyUpi(){
   if(navigator.clipboard){
     navigator.clipboard.writeText(upi).then(function(){ toast('UPI ID copied'); }, function(){ toast(upi); });
@@ -144,15 +165,27 @@ function drawQr(){
 }
 function paint(){
   document.getElementById('upid').textContent = upi;
+  document.getElementById('pav').textContent = (String(payeeName).trim().charAt(0) || 'P').toUpperCase();
+  document.getElementById('pname').textContent = payeeName;
+  document.getElementById('pupi').textContent = upi;
   var sub = note ? ('note: ' + esc(note)) : ('to ' + esc(payeeName));
   document.getElementById('amt').innerHTML = (amount ? ('₹' + esc(amount)) : 'Pay') + '<small>' + sub + '</small>';
-  document.getElementById('appsHead').textContent = amount ? ('Tap your UPI app to pay ₹' + amount) : 'Tap your UPI app to pay';
   document.getElementById('apps').innerHTML =
     APPS.map(function(app){
       return '<button class="app" onclick="openApp(\'' + app.k + '\')">'
         + '<span class="ic" style="background:' + app.color + '">' + app.letter + '</span>' + app.name + '</button>';
     }).join('')
     + '<button class="app" onclick="openChooser()"><span class="ic" style="background:#6B7280">…</span>Other apps</button>';
+
+  if(!IS_TOUCH){
+    // a computer cannot open a UPI app - show the code and ask for a phone
+    document.getElementById('appsHead').textContent = 'Open this link on your phone, or scan the QR';
+    document.getElementById('apps').style.display = 'none';
+    document.getElementById('orLine').style.display = 'none';
+    document.getElementById('tip').textContent = 'This page pays through a UPI app, so it works on a phone. Send this link to your phone, or scan the QR with any UPI app.';
+  } else {
+    document.getElementById('appsHead').textContent = amount ? ('Tap your UPI app to pay ₹' + amount) : 'Tap your UPI app to pay';
+  }
   drawQr();
 }
 /* draw straight away with the built-in UPI id, then quietly upgrade to

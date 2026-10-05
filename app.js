@@ -3679,6 +3679,15 @@ function copyPayLink(){
       function(){ toast(link); });
   } else toast(link);
 }
+function sharePayLink(){
+  var link = payLink();
+  var amt = upiAmount(proPlanChosen);
+  if(navigator.share){
+    navigator.share({ title: 'Pulse Pro', text: 'Pay ₹' + amt + ' for Pulse Pro', url: link }).catch(function(){});
+  } else {
+    copyPayLink();
+  }
+}
 function openUpiApp(){
   launchUpiUrl(upiLink(proPlanChosen));
   toast('Choose your UPI app to pay ₹' + upiAmount(proPlanChosen));
@@ -3781,8 +3790,12 @@ function renderPaySheet(){
   if(!el) return;
   var amt = upiAmount(proPlanChosen);
   var lbl = proPlanChosen === 'pro_yearly' ? 'for one year' : (proPlanChosen === 'pro_trial' ? 'for 1 day (trial)' : 'per month');
+  var payee = String(upiSettings.upi_name || 'Pulse').trim() || 'Pulse';
+  var avLetter = (payee.charAt(0) || 'P').toUpperCase();
   el.innerHTML =
-    '<div class="pay-amount">₹' + amt + ' <span>' + lbl + '</span></div>'
+    '<div class="payee-card"><div class="payee-av">' + esc(avLetter) + '</div>'
+      + '<div class="payee-info"><b>' + esc(payee) + '</b><span>' + esc(upiSettings.upi_id) + '</span></div></div>'
+    + '<div class="pay-amount">₹' + amt + ' <span>' + lbl + '</span></div>'
     + '<div class="pay-apps-head">Tap your UPI app to pay ₹' + amt + '</div>'
     + '<div class="pay-apps">'
       + UPI_APPS.map(function(app){
@@ -3795,7 +3808,6 @@ function renderPaySheet(){
     + '<div class="pay-alt">Tapping an app opens it with the amount and note already filled in - that is the same information the QR holds, so the app can take it from there. If your app opens on its home screen instead, tap <b>Scan QR</b> in the app and pick the saved QR from your gallery.</div>'
     + '<div class="pay-alt">A few apps decline payments to a personal UPI ID. If yours does, use the QR or the UPI ID below.</div>'
     + '<div class="pay-or">or scan the QR</div>'
-    + '<div class="pay-qr-head">Pay ₹' + amt + ' to ' + esc(upiSettings.upi_id) + '</div>'
     + '<div id="pay-qr" class="pay-qr" onclick="openUpiApp()" title="Tap to open your UPI apps"></div>'
     + '<div class="pay-alt">Tap the QR to bring up your UPI apps. Whichever app you pick gets the same payee, amount and note the code holds, so you just enter your PIN.</div>'
     + '<div class="pay-steps">'
@@ -3805,7 +3817,8 @@ function renderPaySheet(){
     + '</div>'
     + '<button class="ghost-btn pay-mini" onclick="downloadQr()">Save QR to my gallery</button>'
     + '<div class="pay-upi">UPI ID: <b>' + esc(upiSettings.upi_id) + '</b><button class="pay-copy" onclick="copyUpi()">Copy</button></div>'
-    + '<button class="ghost-btn pay-mini" onclick="copyPayLink()">Copy a payment link to share</button>'
+    + '<button class="ghost-btn pay-mini" onclick="sharePayLink()">Share payment link (WhatsApp, etc.)</button>'
+    + '<button class="ghost-btn pay-mini" onclick="copyPayLink()">Copy the payment link</button>'
     + '<div class="pay-alt">QR not scanning? Tap <b>Copy</b>, then in your UPI app choose <b>Pay to UPI ID</b> and paste it. That always works.</div>'
     + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
     + '<input id="pay-utr" placeholder="e.g. 405123456789">'
