@@ -3694,6 +3694,47 @@ function loadQrLib(){
   });
 }
 var lastQrDataUrl = null;
+
+/* the UPI apps we can jump straight into on Android.
+   pkg = the app's Android package name; Android uses it to open that
+   exact app, and to send the user to the Play Store if it is missing. */
+var UPI_APPS = [
+  { k:'phonepe', name:'PhonePe',    pkg:'com.phonepe.app',                     color:'#5F259F', letter:'Pe' },
+  { k:'gpay',    name:'Google Pay', pkg:'com.google.android.apps.nbu.paisa.user', color:'#1A73E8', letter:'G'  },
+  { k:'fampay',  name:'FamPay',     pkg:'com.fampay.in',                       color:'#00B96B', letter:'F'  },
+  { k:'paytm',   name:'Paytm',      pkg:'net.one97.paytm',                     color:'#00BAF2', letter:'P'  }
+];
+function upiQs(plan){
+  var link = upiLink(plan);
+  return link.indexOf('?') >= 0 ? link.split('?')[1] : '';
+}
+/* open one specific UPI app, with the amount + note already filled in */
+function openUpiForApp(k){
+  var app = null;
+  for(var i = 0; i < UPI_APPS.length; i++){ if(UPI_APPS[i].k === k) app = UPI_APPS[i]; }
+  if(!app) return;
+  var link = upiLink(proPlanChosen);
+  var target;
+  try {
+    if(/android/i.test(navigator.userAgent || '')){
+      // Android: target this exact app. If it is not installed, Android
+      // opens the Play Store page instead of showing a dead error.
+      var store = 'https://play.google.com/store/apps/details?id=' + app.pkg;
+      target = 'intent://pay?' + upiQs(proPlanChosen) +
+               '#Intent;scheme=upi;package=' + app.pkg +
+               ';S.browser_fallback_url=' + encodeURIComponent(store) + ';end';
+    } else {
+      // iPhone and others: UPI apps share one scheme, so the phone
+      // shows its own chooser.
+      target = link;
+    }
+    var a = document.createElement('a');
+    a.href = target;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ a.remove(); }, 1500);
+    toast('Opening ' + app.name + ' - amount and note are filled in');
+  } catch(e){ toast('Open ' + app.name + ' and pay to ' + upiSettings.upi_id); }
+}
 async function paintQr(){
   var box = document.getElementById('pay-qr');
   if(!box) return;
@@ -3731,6 +3772,17 @@ function renderPaySheet(){
   var lbl = proPlanChosen === 'pro_yearly' ? 'for one year' : (proPlanChosen === 'pro_trial' ? 'for 1 day (trial)' : 'per month');
   el.innerHTML =
     '<div class="pay-amount">₹' + amt + ' <span>' + lbl + '</span></div>'
+    + '<div class="pay-apps-head">Tap your UPI app to pay ₹' + amt + '</div>'
+    + '<div class="pay-apps">'
+      + UPI_APPS.map(function(app){
+          return '<button class="pay-app" onclick="openUpiForApp(\'' + app.k + '\')">'
+            + '<span class="pa-ic" style="background:' + app.color + '">' + app.letter + '</span>' + app.name + '</button>';
+        }).join('')
+      + '<button class="pay-app" onclick="openUpiApp()">'
+        + '<span class="pa-ic" style="background:#6B7280">…</span>Other apps</button>'
+    + '</div>'
+    + '<div class="pay-alt">This opens that app with the amount and note filled in. Some apps still block payments to a personal UPI ID - if yours does, use the QR or the UPI ID below instead.</div>'
+    + '<div class="pay-or">or scan the QR</div>'
     + '<div class="pay-qr-head">Pay ₹' + amt + ' to ' + esc(upiSettings.upi_id) + '</div>'
     + '<div id="pay-qr" class="pay-qr"></div>'
     + '<div class="pay-steps">'
@@ -3741,8 +3793,6 @@ function renderPaySheet(){
     + '<button class="ghost-btn pay-mini" onclick="downloadQr()">Save QR to my gallery</button>'
     + '<div class="pay-upi">UPI ID: <b>' + esc(upiSettings.upi_id) + '</b><button class="pay-copy" onclick="copyUpi()">Copy</button></div>'
     + '<div class="pay-alt">QR not scanning? Tap <b>Copy</b>, then in your UPI app choose <b>Pay to UPI ID</b> and paste it. That always works.</div>'
-    + '<button class="ghost-btn pay-mini" onclick="openUpiApp()">Try opening a UPI app directly</button>'
-    + '<div class="pay-alt">Note: Google Pay and PhonePe often block direct links to a personal UPI ID (not a Pulse problem). If the payment is declined, use the QR or paste the UPI ID instead.</div>'
     + '<div class="field-label" style="margin-top:14px;">After paying, paste the UPI reference (UTR) number here</div>'
     + '<input id="pay-utr" placeholder="e.g. 405123456789">'
     + '<button class="share-btn" onclick="submitUtr()">I have paid - send for approval</button>'
