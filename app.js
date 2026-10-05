@@ -717,7 +717,9 @@ async function fetchSavedPosts(){
 }
 
 async function fetchStories(){
-  const since = new Date(Date.now() - 24*3600*1000).toISOString();
+  // look back 48 hours, then keep free accounts' stories to 24h and
+  // Pro accounts' stories to 48h
+  const since = new Date(Date.now() - 48*3600*1000).toISOString();
   const q = await supa.from('stories')
     .select('id,user_id,image_url,created_at' + audioFields() + storyTextField() + ',profiles!stories_user_id_fkey(id,username,avatar_url)')
     .gt('created_at', since)
@@ -726,6 +728,9 @@ async function fetchStories(){
   if(q.error){ console.error(q.error); return {}; }
   const map = {};
   (q.data || []).forEach(function(s){
+    const authorPro = !!(s.profiles && s.profiles.is_pro);
+    const ageMs = Date.now() - new Date(s.created_at).getTime();
+    if(!authorPro && ageMs > 24*3600*1000) return;   // free stories still last 24 hours
     const uname = (s.profiles && s.profiles.username) || 'user';
     if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [] };
     map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0, texts: Array.isArray(s.text_overlays) ? s.text_overlays : [] });
@@ -890,7 +895,7 @@ function renderPost(p){
       + '<div class="post-user" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')">'
         + '<img src="' + avatarOf(p) + '">'
         + '<div class="names">'
-          + '<span class="uname">' + esc(p.user) + tickFor(p, p.uid === me.id) + '</span>'
+          + '<span class="uname">' + proName(p.user, p.uid === me.id ? isPro() : !!p.is_pro) + tickFor(p, p.uid === me.id) + '</span>'
           + (presenceMap.has(p.uid) ? '<span class="loc" style="color:#22c55e;">Active now</span>' : '')
         + '</div>'
       + '</div>'
@@ -1701,9 +1706,9 @@ async function renderProfile(){
   const shown = profileTab === 'posts' ? myPosts : savedPosts;
   document.getElementById('main-col').innerHTML =
     '<div class="profile-header">'
-      + '<img class="pfp" src="' + avatarOf(me) + '">'
+      + '<span class="pfp-wrap' + ringClass(isPro()) + '"><img class="pfp" src="' + avatarOf(me) + '"></span>'
       + '<div>'
-        + '<h2>' + esc(me.username) + tickFor(me, true)
+        + '<h2>' + proName(me.username, isPro()) + tickFor(me, true)
           + ' <button class="toggle-theme" onclick="openEditProfile()">Edit profile</button>'
           + ' <button class="toggle-theme" onclick="showView(\'settings\')">⚙ Settings</button>'
           + (me.is_admin ? ' <button class="toggle-theme" style="color:#E0A32E;font-weight:600;" onclick="openGrantPro(\'' + me.id + '\',\'' + me.username + '\',' + (isPro() ? 'true' : 'false') + ')">' + (isPro() ? 'Pro ✓' : 'Give Pro') + '</button>' : '')
@@ -1774,12 +1779,12 @@ async function renderOtherProfile(username){
   document.getElementById('main-col').innerHTML =
     '<div style="display:flex;align-items:center;gap:14px;padding:14px 4px;">'
       + '<button onclick="backFromProfile()" style="background:none;border:none;color:var(--text);"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>'
-      + '<span style="font-weight:600;font-size:15px;">' + esc(prof.username) + tickFor(prof, false) + '</span>'
+      + '<span style="font-weight:600;font-size:15px;">' + proName(prof.username, !!prof.is_pro) + tickFor(prof, false) + '</span>'
     + '</div>'
     + '<div class="profile-header">'
-      + '<span class="av-wrap"><img class="pfp" src="' + avatarOf(prof) + '"><span class="presence-dot" data-uid="' + prof.id + '"></span></span>'
+      + '<span class="av-wrap' + ringClass(!!prof.is_pro) + '"><img class="pfp" src="' + avatarOf(prof) + '"><span class="presence-dot" data-uid="' + prof.id + '"></span></span>'
       + '<div>'
-        + '<h2>' + esc(prof.username) + tickFor(prof, false)
+        + '<h2>' + proName(prof.username, !!prof.is_pro) + tickFor(prof, false)
           + ' <button class="primary-btn" id="follow-btn-' + prof.id + '" onclick="toggleFollow(\'' + prof.id + '\')">' + (iFollow ? 'Following' : 'Follow') + '</button>'
           + ' <button class="toggle-theme" onclick="messageUser(\'' + prof.id + '\')">Message</button>'
           + (me.is_admin ? ' <button class="toggle-theme" style="color:#0095F6;font-weight:600;" onclick="toggleBlueTick(\'' + prof.id + '\',\'' + prof.username + '\',' + (prof.badge === 'blue' ? 'true' : 'false') + ')">' + (prof.badge === 'blue' ? 'Remove blue tick' : 'Give blue tick') + '</button>' : '')
@@ -2254,9 +2259,14 @@ document.getElementById('file-input').addEventListener('change', function(e){
   var files = Array.prototype.slice.call(e.target.files || []);
   e.target.value = '';
   if(!files.length) return;
-  if(files.length + pendingImages.length > 5) toast('Up to 5 photos per post — extra photos were not added');
+  var maxPhotos = isPro() ? 10 : 3;
+  if(files.length + pendingImages.length > maxPhotos){
+    toast(isPro()
+      ? 'Up to ' + maxPhotos + ' photos in one post'
+      : 'Free accounts can post up to 3 photos — Pulse Pro lets you post 10');
+  }
   var added = [];
-  for(var i=0;i<files.length && pendingImages.length + added.length < 5;i++){
+  for(var i=0;i<files.length && pendingImages.length + added.length < maxPhotos;i++){
     if(files[i].type && files[i].type.indexOf('image/') !== 0) continue;
     added.push({ file: files[i], dataUrl: null, edit: null });
   }
@@ -2869,6 +2879,12 @@ document.getElementById('song-file-input').addEventListener('change', async func
   var file = e.target.files[0];
   e.target.value = '';
   if(!file) return;
+  if(!isPro()){
+    toast('Adding your own songs to the library is a Pulse Pro feature');
+    try { closeMusicPicker(); } catch(err){}
+    showView('pro');
+    return;
+  }
   var guess = (file.name || 'audio').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim() || 'audio';
   var title = prompt('Song title:', guess);
   if(title === null) return;
@@ -3270,6 +3286,13 @@ function proUntilText(){
   try { return 'Active until ' + new Date(proInfo.current_period_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
   catch(e){ return 'Active'; }
 }
+/* Pro flair: gradient name + animated avatar ring (automatic for Pro members) */
+function proName(username, isProUser){
+  var nm = esc(username);
+  return isProUser ? '<span class="pro-name">' + nm + '</span>' : nm;
+}
+function ringClass(isProUser){ return isProUser ? ' pro-ring' : ''; }
+
 function tickHtml(level){
   var fill = level === 'blue' ? '#0095F6' : '#E0A32E';
   var label = level === 'blue' ? 'Verified' : 'Pulse Pro';
@@ -3322,6 +3345,11 @@ function renderPro(){
     + '<div class="set-title">What you get</div>'
     + '<div class="set-group">'
       + proBenefit('PRO badge next to your name', 'Shows on your profile and on your posts')
+      + proBenefit('Gradient name + animated avatar ring', 'Make your profile stand out')
+      + proBenefit('Up to 10 photos in one post', 'Free accounts can post 3')
+      + proBenefit('Stories that last 48 hours', 'Free stories disappear after 24 hours')
+      + proBenefit('Add your own songs', 'Upload your music into the Pulse library')
+      + proBenefit('Three extra story fonts', 'Script, Display and Wide text styles')
       + proBenefit('HD photo uploads', 'Your photos are kept much sharper instead of being shrunk')
       + proBenefit('Early access to new features', 'Try new tools before everyone else')
       + proBenefit('You keep Pulse alive', 'Your support pays for the servers')
@@ -3414,7 +3442,11 @@ var ST_FONTS = [
   { k: 'classic', label: 'Aa', css: "font-family:'Inter',system-ui,sans-serif;font-weight:600;" },
   { k: 'bold',    label: 'Aa', css: "font-family:'Poppins',sans-serif;font-weight:700;" },
   { k: 'serif',   label: 'Aa', css: "font-family:Georgia,'Times New Roman',serif;font-weight:600;" },
-  { k: 'mono',    label: 'Aa', css: "font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;" }
+  { k: 'mono',    label: 'Aa', css: "font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;" },
+  /* the three below are for Pulse Pro members */
+  { k: 'script',  label: 'Aa', pro: true, css: "font-family:'Brush Script MT','Segoe Script','Apple Chancery',cursive;font-weight:600;" },
+  { k: 'display', label: 'Aa', pro: true, css: "font-family:Impact,'Haettenschweiler','Arial Black',sans-serif;font-weight:700;letter-spacing:.02em;" },
+  { k: 'wide',    label: 'Aa', pro: true, css: "font-family:'Poppins',sans-serif;font-weight:700;letter-spacing:.2em;text-transform:uppercase;" }
 ];
 function stFontCss(k){
   for(var i=0;i<ST_FONTS.length;i++){ if(ST_FONTS[i].k === k) return ST_FONTS[i].css; }
@@ -3502,7 +3534,7 @@ function stPaintControls(){
   if(fonts){
     fonts.innerHTML = ST_FONTS.map(function(f){
       var on = it && (it.f || 'classic') === f.k;
-      return '<button type="button" class="st-font' + (on ? ' on' : '') + '" style="' + f.css + '" onclick="stSetFont(\'' + f.k + '\')">' + f.label + '</button>';
+      return '<button type="button" class="st-font' + (on ? ' on' : '') + (f.pro ? ' pro' : '') + '" style="' + f.css + '" onclick="stSetFont(\'' + f.k + '\')">' + f.label + '</button>';
     }).join('');
   }
   var bgBtn = document.getElementById('st-bg-btn');
@@ -3535,6 +3567,12 @@ function stSetColor(c){
 }
 function stSetFont(k){
   if(stSel < 0 || !storyTexts[stSel]) return;
+  for(var i=0;i<ST_FONTS.length;i++){
+    if(ST_FONTS[i].k === k && ST_FONTS[i].pro && !isPro()){
+      toast('That font is a Pulse Pro feature');
+      return;
+    }
+  }
   storyTexts[stSel].f = k;
   stRender();
 }
