@@ -3822,7 +3822,7 @@ function renderPaySheet(){
     + '<div class="pay-alt">QR not scanning? Tap <b>Copy</b>, then in your UPI app choose <b>Pay to UPI ID</b> and paste it. That always works.</div>'
     + '<div class="pay-alt" style="margin-top:14px;">Paid already? Just tap the button below - nothing to type. The owner sees your payment in their UPI app (your note is <b>' + esc(upiRef()) + '</b>) and switches Pro on.</div>'
     + '<button class="share-btn" onclick="submitPaid()">I have paid - switch Pro on</button>'
-    + (proPlanChosen === 'pro_trial' ? '' : '<button class="ghost-btn" onclick="closePaySheet();startPro()">Or pay by card / netbanking</button>')
+    + '<button class="ghost-btn" onclick="closePaySheet();startPro()">Or pay by card / UPI - Pro switches on by itself</button>'
     + '<div class="pro-note-small">Pro switches on as soon as the owner confirms the payment.</div>';
 }
 function openPaySheet(){
