@@ -732,7 +732,8 @@ async function fetchStories(){
     const ageMs = Date.now() - new Date(s.created_at).getTime();
     if(!authorPro && ageMs > 24*3600*1000) return;   // free stories still last 24 hours
     const uname = (s.profiles && s.profiles.username) || 'user';
-    if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [] };
+    if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [],
+      badge: s.profiles ? s.profiles.badge : null, is_pro: !!(s.profiles && s.profiles.is_pro) };
     map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0, texts: Array.isArray(s.text_overlays) ? s.text_overlays : [] });
   });
   return map;
@@ -874,7 +875,7 @@ function renderStories(){
       + '<div class="story-ring ' + (storySeen(u) ? 'seen' : '') + '">'
       + '<div class="story-ring-inner"><img src="' + avatarOf(s) + '"></div>'
       + '</div>'
-      + '<span>' + esc(u) + '</span>'
+      + '<span>' + proName(u, !!s.is_pro) + tickFor(s, false) + '</span>'
       + '</button>';
   }).join('');
   html += '</div>';
@@ -1149,9 +1150,9 @@ async function renderPeopleResults(){
   try {
     var q;
     if(term){
-      q = await supa.from('profiles').select('id,username,display_name,avatar_url').ilike('username', '%' + term + '%').limit(30);
+      q = await supa.from('profiles').select('id,username,display_name,avatar_url' + profileExtra()).ilike('username', '%' + term + '%').limit(30);
     } else {
-      q = await supa.from('profiles').select('id,username,display_name,avatar_url').neq('id', me.id).order('created_at', { ascending: false }).limit(12);
+      q = await supa.from('profiles').select('id,username,display_name,avatar_url' + profileExtra()).neq('id', me.id).order('created_at', { ascending: false }).limit(12);
     }
     if(q.error) throw q.error;
     var list = (q.data || []).filter(function(p){ return p.id !== me.id; });
@@ -1172,8 +1173,8 @@ function paintPeople(list){
   res.innerHTML = list.map(function(p){
     var following = myFollows.has(p.id);
     return '<div class="person-row" onclick="viewProfile(\'' + p.username + '\')">'
-      + '<img src="' + avatarOf(p) + '">'
-      + '<div class="pr-meta"><div class="pr-u">' + esc(p.username) + '</div><div class="pr-n">' + esc(p.display_name || '') + '</div></div>'
+      + '<span class="av-wrap' + ringClass(!!p.is_pro) + '"><img src="' + avatarOf(p) + '"></span>'
+      + '<div class="pr-meta"><div class="pr-u">' + proName(p.username, !!p.is_pro) + tickFor(p, false) + '</div><div class="pr-n">' + esc(p.display_name || '') + '</div></div>'
       + '<button class="primary-btn" id="follow-btn-' + p.id + '" onclick="event.stopPropagation();toggleFollow(\'' + p.id + '\')">' + (following ? 'Following' : 'Follow') + '</button>'
     + '</div>';
   }).join('');
@@ -1273,7 +1274,7 @@ function renderShortSlide(p){
     + (p.audio ? '<button class="short-song" id="sr-' + p.id + '" title="Play or pause song" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
     + shortMediaHtml(p)
     + '<div class="short-overlay-bottom">'
-      + '<div class="u" style="cursor:pointer" onclick="closeShorts();viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
+      + '<div class="u" style="cursor:pointer" onclick="closeShorts();viewProfile(\'' + p.user + '\')"><span class="av-wrap' + ringClass(!!p.is_pro) + '"><img src="' + avatarOf(p) + '"></span>' + proName(p.user, !!p.is_pro) + tickFor(p, false) + '</div>'
       + (p.caption ? '<div class="cap">' + esc(p.caption) + '</div>' : '')
       + (p.audio ? '<div class="reel-music-chip"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
     + '</div>'
@@ -1384,7 +1385,7 @@ function renderReels(){
           + (p.audio ? '<div class="post-vol" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></div>' : '')
           + (p.audio ? '<button class="post-speaker" id="spk-' + p.id + '" title="Play song" onclick="event.stopPropagation();togglePostAudio(\'' + p.id + '\')" ondblclick="event.stopPropagation()">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
           + '<div class="reel-overlay-bottom">'
-            + '<div class="u" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')"><img src="' + avatarOf(p) + '">' + esc(p.user) + '</div>'
+            + '<div class="u" style="cursor:pointer" onclick="viewProfile(\'' + p.user + '\')"><span class="av-wrap' + ringClass(!!p.is_pro) + '"><img src="' + avatarOf(p) + '"></span>' + proName(p.user, !!p.is_pro) + tickFor(p, false) + '</div>'
             + '<div class="cap">' + esc(p.caption) + '</div>'
             + (p.audio ? '<div class="reel-music-chip"><span class="eq"><i></i><i></i><i></i></span><span class="mtitle">' + esc((p.audioTitle || 'audio') + (p.audioArtist ? ' · ' + p.audioArtist : '')) + '</span></div>' : '')
           + '</div>'
@@ -1997,15 +1998,15 @@ function stopStoryAudio(){
 function getStoryUser(u){
   if(me && u === me.username){
     const entry = storiesByUser[u] || { avatar: me.avatar_url, items: [] };
-    return { u: u, uid: me.id, avatar: entry.avatar || me.avatar_url, items: entry.items, mine: true };
+    return { u: u, uid: me.id, avatar: entry.avatar || me.avatar_url, items: entry.items, mine: true, badge: me.badge || null, is_pro: isPro() };
   }
   const s = storiesByUser[u];
-  return s ? { u: u, uid: s.uid, avatar: s.avatar, items: s.items, mine: false } : { items: [] };
+  return s ? { u: u, uid: s.uid, avatar: s.avatar, items: s.items, mine: false, badge: s.badge || null, is_pro: !!s.is_pro } : { items: [] };
 }
 
 function svPaintHeader(){
   if(!svUser) return;
-  document.getElementById('sv-uname').textContent = svUser.u;
+  document.getElementById('sv-uname').innerHTML = proName(svUser.u, svUser.mine ? isPro() : !!svUser.is_pro) + tickFor(svUser, !!svUser.mine);
   document.getElementById('sv-avatar').src = avatarOf(svUser.mine ? me : svUser);
   document.getElementById('sv-delete').style.display = svUser.mine ? 'flex' : 'none';
   document.getElementById('sv-reply').value = '';
