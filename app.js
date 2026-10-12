@@ -1080,7 +1080,15 @@ function togglePostAudio(id, byUser){
   catch(e){ toast('Could not play this audio'); audioWantedId = null; return; }
   currentAudio = a;
   boostAudio(a, p.audioVolume);
-  a.onended = function(){ if(audioWantedId === id) stopAudio(); };
+  // like Instagram: when the song reaches the end it starts again
+  a.onended = function(){
+    if(audioWantedId !== id) return;
+    try {
+      a.currentTime = (p.audioStart > 0 ? p.audioStart : 0);
+      var again = a.play();
+      if(again && again.catch) again.catch(function(){ if(audioWantedId === id) stopAudio(); });
+    } catch(e){ if(audioWantedId === id) stopAudio(); }
+  };
   a.onerror = function(){ if(audioWantedId === id){ toast('Could not play this audio'); stopAudio(); } };
   a.play().then(function(){
     if(audioWantedId !== id){ try{ a.pause(); }catch(e){} return; }   // a newer song took over
@@ -2110,8 +2118,17 @@ function playStory(){
     try {
       svAudio = applyVol(new Audio(item.audio));
       boostAudio(svAudio, item.audioVolume);
-      svAudio.play().then(function(){
-        if(item.audioStart > 0){ try{ svAudio.currentTime = item.audioStart; }catch(e){} }
+      var svThis = svAudio;
+      svThis.onended = function(){
+        if(svAudio !== svThis) return;                 // a different story took over
+        try {
+          svThis.currentTime = (item.audioStart > 0 ? item.audioStart : 0);
+          var rp = svThis.play();
+          if(rp && rp.catch) rp.catch(function(){});
+        } catch(e){}
+      };
+      svThis.play().then(function(){
+        if(item.audioStart > 0){ try{ svThis.currentTime = item.audioStart; }catch(e){} }
         if(sticker) sticker.classList.add('playing');
       }).catch(function(){});
     } catch(e){ svAudio = null; }
