@@ -1017,23 +1017,22 @@ function loadVolume(){
 }
 function applyVol(a){ try { if(a) a.volume = audioVolume; } catch(e){} return a; }
 /* A song can be boosted up to 200% when it is posted. An <audio> element's
-   own volume stops at 100%, so the boost is applied through a Web Audio
-   gain node. If Web Audio is not available the boost is simply skipped. */
+   own volume stops at 100%, so the boost goes through a Web Audio gain node.
+
+   IMPORTANT: Web Audio can only read the samples of a file the browser is
+   allowed to read. A song hosted somewhere else (Supabase storage, say) must
+   be fetched with CORS, otherwise the graph outputs TOTAL SILENCE instead of
+   a louder song. So a boosted song asks for CORS, and if the host refuses we
+   rebuild it as a plain element and play at normal volume - never silence. */
 var audioCtx = null;
 var gainMap = new WeakMap();
-function boostAudio(a, boost){
-  if(!a) return a;
+function attachGain(a, boost){
   var b = Math.max(1, Math.min(2, Number(boost) || 1));
+  if(!a || b <= 1.001) return a;
   try {
-    if(b <= 1.001){
-      if(gainMap.has(a)) gainMap.get(a).gain.value = 1;
-      return a;
-    }
-    if(!audioCtx){
-      var AC = window.AudioContext || window.webkitAudioContext;
-      if(!AC) return a;
-      audioCtx = new AC();
-    }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return a;
+    if(!audioCtx) audioCtx = new AC();
     var g = gainMap.get(a);
     if(!g){
       var src = audioCtx.createMediaElementSource(a);
@@ -1044,7 +1043,25 @@ function boostAudio(a, boost){
     }
     g.gain.value = b;
     if(audioCtx.state === 'suspended'){ try { audioCtx.resume(); } catch(e){} }
-  } catch(e){ /* no boost available - normal volume */ }
+  } catch(e){ /* no Web Audio - the song just plays at normal volume */ }
+  return a;
+}
+function songAudio(url, boost){
+  var b = Math.max(1, Math.min(2, Number(boost) || 1));
+  var a = new Audio();
+  a._boost = b;
+  if(b > 1.001) a.crossOrigin = 'anonymous';   // must be set BEFORE the src
+  applyVol(a);
+  if(b > 1.001) attachGain(a, b);
+  a.src = url;
+  return a;
+}
+/* if a boosted song could not be read (host refused CORS), swap in a plain
+   element so it still plays - just at normal volume */
+function plainSongAudio(url, onended){
+  var a = applyVol(new Audio());
+  if(onended) a.onended = onended;
+  a.src = url;
   return a;
 }
 function setVolume(v){
@@ -1076,10 +1093,9 @@ function togglePostAudio(id, byUser){
   stopAudio();
   audioWantedId = id;
   var a;
-  try { a = applyVol(new Audio(p.audio)); }
+  try { a = songAudio(p.audio, p.audioVolume); }
   catch(e){ toast('Could not play this audio'); audioWantedId = null; return; }
   currentAudio = a;
-  boostAudio(a, p.audioVolume);
   // like Instagram: when the song reaches the end it starts again
   a.onended = function(){
     if(audioWantedId !== id) return;
@@ -1089,7 +1105,22 @@ function togglePostAudio(id, byUser){
       if(again && again.catch) again.catch(function(){ if(audioWantedId === id) stopAudio(); });
     } catch(e){ if(audioWantedId === id) stopAudio(); }
   };
-  a.onerror = function(){ if(audioWantedId === id){ toast('Could not play this audio'); stopAudio(); } };
+  a.onerror = function(){
+    if(audioWantedId !== id) return;
+    if(a._boost > 1.001){
+      // the host would not let us read the file, so play it plainly
+      // instead of leaving it silent
+      try {
+        var plain = plainSongAudio(p.audio, a.onended);
+        plain.onerror = function(){ if(audioWantedId === id){ toast('Could not play this audio'); stopAudio(); } };
+        currentAudio = plain;
+        plain.play().catch(function(){});
+        return;
+      } catch(e){}
+    }
+    toast('Could not play this audio');
+    stopAudio();
+  };
   a.play().then(function(){
     if(audioWantedId !== id){ try{ a.pause(); }catch(e){} return; }   // a newer song took over
     playingAudioPostId = id;
@@ -2116,8 +2147,7 @@ function playStory(){
       sticker.querySelector('.mtitle').textContent = (item.audioTitle || 'audio') + (item.audioArtist ? ' · ' + item.audioArtist : '');
     }
     try {
-      svAudio = applyVol(new Audio(item.audio));
-      boostAudio(svAudio, item.audioVolume);
+      svAudio = songAudio(item.audio, item.audioVolume);
       var svThis = svAudio;
       svThis.onended = function(){
         if(svAudio !== svThis) return;                 // a different story took over
@@ -2891,7 +2921,7 @@ function onVolRange(){
   pendingSong.vol = Math.max(1, Math.min(2, (parseFloat(r.value) || 100) / 100));
   var lbl = document.getElementById('music-vol-label');
   if(lbl) lbl.textContent = Math.round(pendingSong.vol * 100) + '%';
-  if(previewAudio){ applyVol(previewAudio); boostAudio(previewAudio, pendingSong.vol); }
+  if(previewAudio){ applyVol(previewAudio); attachGain(previewAudio, pendingSong.vol); }
 }
 function onStartRange(){
   if(!pendingSong) return;
@@ -2909,8 +2939,17 @@ function previewFromStart(){
   if(!pendingSong || !pendingSong.url) return;
   stopPreview();
   try {
-    previewAudio = applyVol(new Audio(pendingSong.url));
-    boostAudio(previewAudio, pendingSong.vol);
+    previewAudio = songAudio(pendingSong.url, pendingSong.vol);
+    previewAudio.onerror = function(){
+      if(previewAudio._boost > 1.001){
+        try {
+          var pp = plainSongAudio(pendingSong.url, stopPreview);
+          previewAudio = pp;
+          pp.play().catch(function(){});
+          return;
+        } catch(e){}
+      }
+    };
     previewAudio.onended = stopPreview;
     previewAudio.onerror = stopPreview;
     previewAudio.play().then(function(){
