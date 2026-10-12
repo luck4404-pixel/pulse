@@ -791,7 +791,7 @@ async function loadSavedIds(){
 
 async function loadSuggestions(){
   const q = await supa.from('profiles')
-    .select('id,username,avatar_url')
+    .select('id,username,avatar_url' + profileExtra())
     .neq('id', me.id)
     .order('created_at', { ascending: false })
     .limit(5);
@@ -1819,8 +1819,12 @@ function renderSuggestions(){
   if(!el) return;
   el.innerHTML = suggestionsData.map(function(s){
     const following = myFollows.has(s.id);
+    const isProUser = !!s.is_pro;
     return '<div class="suggestion">'
-      + '<div class="l" style="cursor:pointer" onclick="viewProfile(\'' + s.username + '\')"><img src="' + avatarOf(s) + '"><div><div class="u">' + esc(s.username) + '</div></div></div>'
+      + '<div class="l" style="cursor:pointer" onclick="viewProfile(\'' + s.username + '\')">'
+        + '<span class="av-wrap' + ringClass(isProUser) + '"><img src="' + avatarOf(s) + '"></span>'
+        + '<div><div class="u">' + proName(s.username, isProUser) + tickFor(s, false) + '</div></div>'
+      + '</div>'
       + '<button class="' + (following ? 'following' : '') + '" onclick="event.stopPropagation();toggleFollow(\'' + s.id + '\')">' + (following ? 'Following' : 'Follow') + '</button>'
     + '</div>';
   }).join('');
