@@ -212,6 +212,10 @@
   .suggestion button.following{color:var(--text);}
   .suggestion .tick svg{width:15px;height:15px;}
   .suggestion .av-wrap img{border-radius:50%;}
+  .sheet-btn{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--border);color:var(--text);font-family:inherit;font-size:15px;padding:14px 2px;cursor:pointer;}
+  .sheet-btn:first-child{border-top:none;}
+  .sheet-btn.danger{color:#ED4956;}
+  .sheet-note{font-size:12.5px;color:var(--text-soft);line-height:1.5;padding:2px 0 12px;}
   .side-footer{margin-top:26px;font-size:11.5px;color:var(--text-faint);line-height:1.8;}
 
   /* ---------- Bottom nav (mobile) ---------- */
@@ -1041,6 +1045,13 @@
           <button type="button" class="song-use" style="padding:5px 10px;" onclick="previewFromStart()" title="Preview from here">▶</button>
         </div>
       </div>
+      <div id="music-vol-row" style="display:none;margin-top:10px;">
+        <label class="field-label">Song volume (up to 200%)</label>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="range" id="music-vol-range" min="100" max="200" step="5" value="100" style="flex:1;accent-color:var(--accent-d);" oninput="onVolRange()">
+          <span id="music-vol-label" style="font-size:12px;color:var(--text-soft);min-width:42px;text-align:right;">100%</span>
+        </div>
+      </div>
       <button class="share-btn" id="share-btn" disabled onclick="publishCreate()">Share</button>
     </div>
   </div>
@@ -1214,6 +1225,27 @@
   </div>
 </div>
 
+<!-- Post options (edit caption / delete) -->
+<div class="modal-overlay" id="post-menu-modal" onclick="if(event.target===this)closePostMenu()">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-head"><h3>Post options</h3><button onclick="closePostMenu()">&times;</button></div>
+    <div class="modal-body" id="post-menu-body"></div>
+  </div>
+</div>
+
+<!-- Edit caption -->
+<div class="modal-overlay" id="edit-caption-modal" onclick="if(event.target===this)closeEditCaption()">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-head"><h3>Edit caption</h3><button onclick="closeEditCaption()">&times;</button></div>
+    <div class="modal-body">
+      <label class="field-label">Caption</label>
+      <textarea id="cap-edit-input" rows="4" placeholder="Write a caption..." style="width:100%;resize:vertical;font-family:inherit;font-size:14px;line-height:1.5;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);"></textarea>
+      <button class="share-btn" onclick="saveCaption()">Save caption</button>
+      <button class="ghost-btn" onclick="closeEditCaption()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- About -->
 <div class="modal-overlay" id="about-modal" onclick="if(event.target===this)closeAbout()">
   <div class="modal" style="max-width:380px;">
@@ -1340,6 +1372,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=64"></script>
+<script src="app.js?v=65"></script>
 </body>
 </html>

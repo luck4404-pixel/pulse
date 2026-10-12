@@ -123,6 +123,7 @@ let songListShown = [];    // filtered list currently rendered in the picker
 let previewAudio = null;
 let previewingKey = null;
 let musicStartReady = null;  // audio_start column exists
+let musicVolumeReady = null; // posts.audio_volume column exists (song boost up to 200%)
 let storyLikesReady = null;  // story_likes table exists
 let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
@@ -202,9 +203,9 @@ async function afterLogin(){
   }
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
-    const probeBefore = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
+    const probeBefore = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
     runProbes().then(function(){
-      const probeAfter = [musicReady, songsReady, musicStartReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
+      const probeAfter = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
       if(probeBefore !== probeAfter) scheduleRefresh();
     });
   } else {
@@ -523,7 +524,7 @@ async function checkMusicColumns(){
 }
 function audioFields(){
   if(!musicReady) return '';
-  return ',audio_url,audio_title,audio_artist' + (musicStartReady ? ',audio_start' : '');
+  return ',audio_url,audio_title,audio_artist' + (musicStartReady ? ',audio_start' : '') + (musicVolumeReady ? ',audio_volume' : '');
 }
 function mediaField(){
   if(!mediaUrlsReady) return '';
@@ -549,6 +550,12 @@ async function checkMusicStart(){
     const q = await supa.from('posts').select('audio_start').limit(1);
     musicStartReady = !q.error;
   } catch(e){ musicStartReady = false; }
+}
+async function checkMusicVolume(){
+  try {
+    const q = await supa.from('posts').select('audio_volume').limit(1);
+    musicVolumeReady = !q.error;
+  } catch(e){ musicVolumeReady = false; }
 }
 async function checkBadges(){
   try {
@@ -590,7 +597,7 @@ async function checkMediaMsgV2(){
 /* ---- one parallel probe round instead of 7 sequential ones ---- */
 async function runProbes(){
   await Promise.all([
-    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMediaUrls(),
+    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMusicVolume(), checkMediaUrls(),
     checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2(), checkStoryText(), checkBadges()
   ]);
   saveProbeCache();
@@ -603,6 +610,7 @@ function loadProbeCache(){
     musicReady = probeCache.musicReady;
     songsReady = probeCache.songsReady;
     musicStartReady = probeCache.musicStartReady;
+    musicVolumeReady = probeCache.musicVolumeReady;
     storyLikesReady = probeCache.storyLikesReady;
     mediaMsgReady = probeCache.mediaMsgReady;
     mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
@@ -615,7 +623,7 @@ function saveProbeCache(){
   try {
     localStorage.setItem('pulse-probes-v1', JSON.stringify({
       musicReady: musicReady, songsReady: songsReady,
-      musicStartReady: musicStartReady, storyLikesReady: storyLikesReady,
+      musicStartReady: musicStartReady, musicVolumeReady: musicVolumeReady, storyLikesReady: storyLikesReady,
       mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready,
       mediaUrlsReady: mediaUrlsReady,
       storyTextReady: storyTextReady,
@@ -654,6 +662,7 @@ function mapPost(p){
     audioTitle: p.audio_title || '',
     audioArtist: p.audio_artist || '',
     audioStart: Number(p.audio_start) || 0,
+    audioVolume: Number(p.audio_volume) || 1,
     time: p.created_at,
     likes: (p.likes || []).map(function(l){ return l.user_id; }),
     comments: (p.comments || []).map(function(c){
@@ -734,7 +743,7 @@ async function fetchStories(){
     const uname = (s.profiles && s.profiles.username) || 'user';
     if(!map[uname]) map[uname] = { uid: s.user_id, avatar: s.profiles ? s.profiles.avatar_url : null, items: [],
       badge: s.profiles ? s.profiles.badge : null, is_pro: !!(s.profiles && s.profiles.is_pro) };
-    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0, texts: Array.isArray(s.text_overlays) ? s.text_overlays : [] });
+    map[uname].items.push({ id: s.id, img: s.image_url, time: s.created_at, audio: s.audio_url || null, audioTitle: s.audio_title || '', audioArtist: s.audio_artist || '', audioStart: Number(s.audio_start) || 0, audioVolume: Number(s.audio_volume) || 1, texts: Array.isArray(s.text_overlays) ? s.text_overlays : [] });
   });
   return map;
 }
@@ -1007,6 +1016,37 @@ function loadVolume(){
   } catch(e){}
 }
 function applyVol(a){ try { if(a) a.volume = audioVolume; } catch(e){} return a; }
+/* A song can be boosted up to 200% when it is posted. An <audio> element's
+   own volume stops at 100%, so the boost is applied through a Web Audio
+   gain node. If Web Audio is not available the boost is simply skipped. */
+var audioCtx = null;
+var gainMap = new WeakMap();
+function boostAudio(a, boost){
+  if(!a) return a;
+  var b = Math.max(1, Math.min(2, Number(boost) || 1));
+  try {
+    if(b <= 1.001){
+      if(gainMap.has(a)) gainMap.get(a).gain.value = 1;
+      return a;
+    }
+    if(!audioCtx){
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return a;
+      audioCtx = new AC();
+    }
+    var g = gainMap.get(a);
+    if(!g){
+      var src = audioCtx.createMediaElementSource(a);
+      g = audioCtx.createGain();
+      src.connect(g);
+      g.connect(audioCtx.destination);
+      gainMap.set(a, g);
+    }
+    g.gain.value = b;
+    if(audioCtx.state === 'suspended'){ try { audioCtx.resume(); } catch(e){} }
+  } catch(e){ /* no boost available - normal volume */ }
+  return a;
+}
 function setVolume(v){
   audioVolume = Math.max(0, Math.min(1, Number(v) || 0));
   try { localStorage.setItem('pulse-volume', String(audioVolume)); } catch(e){}
@@ -1039,6 +1079,7 @@ function togglePostAudio(id, byUser){
   try { a = applyVol(new Audio(p.audio)); }
   catch(e){ toast('Could not play this audio'); audioWantedId = null; return; }
   currentAudio = a;
+  boostAudio(a, p.audioVolume);
   a.onended = function(){ if(audioWantedId === id) stopAudio(); };
   a.onerror = function(){ if(audioWantedId === id){ toast('Could not play this audio'); stopAudio(); } };
   a.play().then(function(){
@@ -1072,7 +1113,7 @@ var postsError = null;   // set when the posts query itself failed (so we never 
 function feedSignature(){
   var s = (me ? me.username : '') + '|' + mySaved.size + '|' + (postsError || '') + '|';
   s += (posts || []).map(function(p){
-    return p.id + ':' + p.user + ':' + (p.likes ? p.likes.length : 0) + ':' + (p.comments ? p.comments.length : 0) + ':' + (p.badge || '') + ':' + (p.is_pro ? 1 : 0);
+    return p.id + ':' + p.user + ':' + (p.likes ? p.likes.length : 0) + ':' + (p.comments ? p.comments.length : 0) + ':' + (p.badge || '') + ':' + (p.is_pro ? 1 : 0) + ':' + (p.caption || '');
   }).join(',');
   s += '|' + Object.keys(storiesByUser || {}).map(function(u){
     var st = storiesByUser[u];
@@ -2068,6 +2109,7 @@ function playStory(){
     }
     try {
       svAudio = applyVol(new Audio(item.audio));
+      boostAudio(svAudio, item.audioVolume);
       svAudio.play().then(function(){
         if(item.audioStart > 0){ try{ svAudio.currentTime = item.audioStart; }catch(e){} }
         if(sticker) sticker.classList.add('playing');
@@ -2801,7 +2843,7 @@ function toggleSongPreview(key){
 function chooseSong(i){
   var s = songListShown[i];
   if(!s) return;
-  pendingSong = { url: s.audio_url, title: s.title || '', artist: s.artist || '', start: 0, duration: 0 };
+  pendingSong = { url: s.audio_url, title: s.title || '', artist: s.artist || '', start: 0, duration: 0, vol: 1 };
   stopPreview();
   closeMusicPicker();
   renderMusicRow();
@@ -2825,6 +2867,15 @@ function probeSongDuration(){
     probe.src = pendingSong.url;
   } catch(e){}
 }
+function onVolRange(){
+  if(!pendingSong) return;
+  var r = document.getElementById('music-vol-range');
+  if(!r) return;
+  pendingSong.vol = Math.max(1, Math.min(2, (parseFloat(r.value) || 100) / 100));
+  var lbl = document.getElementById('music-vol-label');
+  if(lbl) lbl.textContent = Math.round(pendingSong.vol * 100) + '%';
+  if(previewAudio){ applyVol(previewAudio); boostAudio(previewAudio, pendingSong.vol); }
+}
 function onStartRange(){
   if(!pendingSong) return;
   pendingSong.start = parseFloat(document.getElementById('music-start-range').value) || 0;
@@ -2842,6 +2893,7 @@ function previewFromStart(){
   stopPreview();
   try {
     previewAudio = applyVol(new Audio(pendingSong.url));
+    boostAudio(previewAudio, pendingSong.vol);
     previewAudio.onended = stopPreview;
     previewAudio.onerror = stopPreview;
     previewAudio.play().then(function(){
@@ -2872,10 +2924,20 @@ function renderMusicRow(){
         tl.style.display = 'none';
       }
     }
+    var vrow = document.getElementById('music-vol-row');
+    if(vrow){
+      vrow.style.display = musicVolumeReady ? 'block' : 'none';
+      var vr = document.getElementById('music-vol-range');
+      if(vr) vr.value = Math.round((pendingSong.vol || 1) * 100);
+      var vl = document.getElementById('music-vol-label');
+      if(vl) vl.textContent = Math.round((pendingSong.vol || 1) * 100) + '%';
+    }
   } else {
     row.style.display = 'none';
     btn.style.display = 'flex';
     if(tl) tl.style.display = 'none';
+    var vrowOff = document.getElementById('music-vol-row');
+    if(vrowOff) vrowOff.style.display = 'none';
   }
 }
 function clearMusic(){ pendingSong = null; renderMusicRow(); }
@@ -2902,7 +2964,7 @@ document.getElementById('song-file-input').addEventListener('change', async func
     await loadSongs();
     for(var i=0;i<songsCache.length;i++){
       if(songsCache[i].audio_url === url){
-        pendingSong = { url: url, title: songsCache[i].title, artist: songsCache[i].artist || '', start: 0, duration: 0 };
+        pendingSong = { url: url, title: songsCache[i].title, artist: songsCache[i].artist || '', start: 0, duration: 0, vol: 1 };
         probeSongDuration();
         break;
       }
@@ -2944,6 +3006,7 @@ async function publishCreate(){
         payload.audio_title = pendingSong.title || null;
         payload.audio_artist = pendingSong.artist || null;
         if(musicStartReady) payload.audio_start = pendingSong.start || 0;
+        if(musicVolumeReady) payload.audio_volume = pendingSong.vol || 1;
       }
       const r = await supa.from('posts').insert(payload);
       if(r.error) throw r.error;
@@ -2964,6 +3027,7 @@ async function publishCreate(){
         payload2.audio_title = pendingSong.title || null;
         payload2.audio_artist = pendingSong.artist || null;
         if(musicStartReady) payload2.audio_start = pendingSong.start || 0;
+        if(musicVolumeReady) payload2.audio_volume = pendingSong.vol || 1;
       }
       const r = await supa.from('stories').insert(payload2);
       if(r.error) throw r.error;
@@ -3035,19 +3099,65 @@ async function saveProfile(){
 }
 
 /* ---------------- Delete post ---------------- */
-async function postMenu(id){
+function postMenu(id){
   const p = postIndex[id];
   if(!p) return;
-  if(p.uid !== me.id){
-    toast('You can only delete your own posts');
-    return;
-  }
+  if(p.uid !== me.id){ toast('You can only change your own posts'); return; }
+  const canEdit = isPro() || !!(me && me.is_admin);
+  const body = document.getElementById('post-menu-body');
+  if(!body) return;
+  body.innerHTML =
+      (canEdit
+        ? '<button class="sheet-btn" onclick="openEditCaption(\'' + id + '\')">Edit caption</button>'
+        : '<div class="sheet-note">Editing the caption of a posted photo is a Pulse Pro feature.</div>')
+    + '<button class="sheet-btn danger" onclick="deletePost(\'' + id + '\')">Delete post</button>'
+    + '<button class="sheet-btn" onclick="closePostMenu()">Cancel</button>';
+  document.getElementById('post-menu-modal').classList.add('open');
+}
+function closePostMenu(){
+  const m = document.getElementById('post-menu-modal');
+  if(m) m.classList.remove('open');
+}
+async function deletePost(id){
+  closePostMenu();
   if(!confirm('Delete this post? This cannot be undone.')) return;
   const r = await supa.from('posts').delete().eq('id', id);
   if(r.error){ toast('Could not delete the post'); return; }
   if(postModalOpenId === id) closePostModal();
   await refreshData();
   toast('Post deleted');
+}
+/* ---------------- Edit a caption you already posted ---------------- */
+var editCaptionId = null;
+function openEditCaption(id){
+  closePostMenu();
+  const p = postIndex[id];
+  if(!p) return;
+  editCaptionId = id;
+  const inp = document.getElementById('cap-edit-input');
+  if(inp) inp.value = p.caption || '';
+  document.getElementById('edit-caption-modal').classList.add('open');
+  setTimeout(function(){ try { inp.focus(); } catch(e){} }, 80);
+}
+function closeEditCaption(){
+  const m = document.getElementById('edit-caption-modal');
+  if(m) m.classList.remove('open');
+  editCaptionId = null;
+}
+async function saveCaption(){
+  if(!editCaptionId) return;
+  const inp = document.getElementById('cap-edit-input');
+  const val = (inp ? inp.value : '').trim();
+  const id = editCaptionId;
+  try {
+    const r = await supa.from('posts').update({ caption: val || null }).eq('id', id);
+    if(r.error){ toast('Could not save - run the caption SQL in Supabase first'); return; }
+    const p = postIndex[id];
+    if(p) p.caption = val;
+    closeEditCaption();
+    await refreshData();
+    toast('Caption updated');
+  } catch(e){ toast('Could not save the caption'); }
 }
 
 /* ---------------- Log out ---------------- */
