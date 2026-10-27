@@ -497,20 +497,38 @@ function agreePrivacy(){
 /* ---------------- Storage upload ---------------- */
 async function uploadImage(file, maxDim){
   var proUser = (typeof isPro === 'function') && isPro();
-  file = await compressImage(file, maxDim || (proUser ? 2560 : 1440), proUser ? 0.92 : 0.82);
+  file = await compressImage(file, maxDim || (proUser ? 1600 : 1080), proUser ? 0.85 : 0.78);
   const safeName = (file && file.name ? file.name : 'photo').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'photo';
   const path = me.id + '/' + Date.now() + '_' + safeName;
   const up = await supa.storage.from('media').upload(path, file);
-  if(up.error) throw up.error;
+  if(up.error) throw storageError(up.error);
   const pub = supa.storage.from('media').getPublicUrl(path);
   return pub.data.publicUrl;
+}
+
+/* turn a public file URL back into the path inside the bucket */
+function storagePathFromUrl(url){
+  var m = String(url || '').match(/\/object\/public\/media\/([^?#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/* Supabase's raw errors are cryptic - say plainly what happened */
+function storageError(err){
+  const msg = String((err && err.message) || err || '');
+  if(/exceeded|quota|full|storage limit|not enough/i.test(msg)){
+    return new Error('Photo storage is full. Delete a few old posts (or upgrade the Supabase plan) and try again.');
+  }
+  if(/too large|maximum.*size|payload/i.test(msg)){
+    return new Error('That file is too big to upload. Try a smaller photo.');
+  }
+  return err;
 }
 
 async function uploadAudioFile(file){
   const safeName = (file && file.name ? file.name : 'audio').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'audio';
   const path = me.id + '/' + Date.now() + '_' + safeName;
   const up = await supa.storage.from('media').upload(path, file, { contentType: (file && file.type) || 'audio/mpeg' });
-  if(up.error) throw up.error;
+  if(up.error) throw storageError(up.error);
   const pub = supa.storage.from('media').getPublicUrl(path);
   return pub.data.publicUrl;
 }
@@ -1650,11 +1668,11 @@ function openUrlViewer(url){
   document.getElementById('img-viewer').classList.add('open');
 }
 async function uploadMsgFile(file){
-  file = await compressImage(file, 1440, 0.82);
+  file = await compressImage(file, 1080, 0.78);
   var safeName = (file && file.name ? file.name : 'file').replace(/[^a-zA-Z0-9._-]/g, '').slice(-40) || 'file';
   var path = me.id + '/msg_' + Date.now() + '_' + safeName;
   var up = await supa.storage.from('media').upload(path, file, { contentType: (file && file.type) || 'application/octet-stream' });
-  if(up.error) throw up.error;
+  if(up.error) throw storageError(up.error);
   var pub = supa.storage.from('media').getPublicUrl(path);
   return pub.data.publicUrl;
 }
@@ -2796,7 +2814,7 @@ async function buildEditedFile(file){
   if(!file) return null;
   if(!ed.edited || !edSource) return file;
   try {
-    var MAX = 1440;
+    var MAX = 1080;
     var sw = edSource.w, sh = edSource.h;
     var sc = Math.min(1, MAX / Math.max(sw, sh));
     var w = Math.max(1, Math.round(sw * sc)), h = Math.max(1, Math.round(sh * sc));
@@ -2810,7 +2828,7 @@ async function buildEditedFile(file){
     var data = ctx.getImageData(0, 0, w, h);
     edFilterPixels(data);
     ctx.putImageData(data, 0, 0);
-    var blob = await new Promise(function(res){ cv.toBlob(res, 'image/jpeg', 0.92); });
+    var blob = await new Promise(function(res){ cv.toBlob(res, 'image/jpeg', 0.85); });
     if(!blob) return file;
     return new File([blob], 'photo-edited.jpg', { type: 'image/jpeg' });
   } catch(err){
@@ -3177,11 +3195,28 @@ function closePostMenu(){
 async function deletePost(id){
   closePostMenu();
   if(!confirm('Delete this post? This cannot be undone.')) return;
+  const p = postIndex[id];
+  const urls = [];
+  if(p){
+    if(p.img) urls.push(p.img);
+    (p.media || []).forEach(function(u){ if(u) urls.push(u); });
+    // note: the song is NOT removed - it may be shared with the song library
+  }
   const r = await supa.from('posts').delete().eq('id', id);
   if(r.error){ toast('Could not delete the post'); return; }
   if(postModalOpenId === id) closePostModal();
+  // free the space the photos were using. This used to be left behind,
+  // which is what slowly fills the storage bucket.
+  const paths = urls.map(storagePathFromUrl).filter(Boolean).filter(function(v, i, arr){ return arr.indexOf(v) === i; });
+  let freed = 0;
+  if(paths.length){
+    try {
+      const rm = await supa.storage.from('media').remove(paths);
+      if(!rm.error) freed = paths.length;
+    } catch(e){}
+  }
   await refreshData();
-  toast('Post deleted');
+  toast(freed ? ('Post deleted - ' + freed + ' photo' + (freed > 1 ? 's' : '') + ' removed from storage') : 'Post deleted');
 }
 /* ---------------- Edit a caption you already posted ---------------- */
 var editCaptionId = null;
