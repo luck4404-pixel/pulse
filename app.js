@@ -3112,8 +3112,12 @@ async function publishCreate(){
       toast('Added to your story');
     }
   } catch(err){
-    console.error(err);
-    toast('Upload failed — check the media bucket in Supabase');
+    console.error('upload failed:', err);
+    // show the REAL reason instead of a vague message, so it can be fixed
+    var m = '';
+    try { m = (err && (err.message || err.error_description || err.msg)) || String(err) || ''; } catch(e){}
+    m = String(m).replace(/\s+/g, ' ').trim();
+    toast('Upload failed: ' + (m ? m.slice(0, 150) : 'unknown error'));
   } finally {
     btn.disabled = false;
     btn.textContent = createTab === 'post' ? 'Share' : 'Add to story';
@@ -4144,6 +4148,40 @@ async function reviewPayment(id, approve){
   } catch(e){ console.error(e); toast('Could not update'); }
 }
 
+/* ---------------- Free up storage ---------------- */
+/* Stories expire after 24/48 hours, but their photo files used to stay in
+   the bucket for ever. This removes the files of YOUR OWN expired stories.
+   Nothing visible changes - those stories have already gone. */
+async function cleanOldStoryFiles(){
+  if(!me) return;
+  if(!confirm('Remove the photos of your stories older than 3 days?\n\nThose stories have already expired, so nothing you can see will change - it only frees storage space.')) return;
+  try {
+    var cutoff = new Date(Date.now() - 3*24*3600*1000).toISOString();
+    var q = await supa.from('stories').select('id,image_url,audio_url,created_at').eq('user_id', me.id).lt('created_at', cutoff).limit(500);
+    if(q.error){ toast('Could not read your stories: ' + String(q.error.message || '').slice(0, 80)); return; }
+    var paths = [];
+    (q.data || []).forEach(function(s){
+      [s.image_url, s.audio_url].forEach(function(u){
+        var p = storagePathFromUrl(u);
+        // only ever touch files in your own folder
+        if(p && p.indexOf(me.id + '/') === 0) paths.push(p);
+      });
+    });
+    paths = paths.filter(function(v, i, arr){ return arr.indexOf(v) === i; });
+    if(!paths.length){ toast('Nothing to clean - no expired story photos found'); return; }
+    var removed = 0;
+    for(var i = 0; i < paths.length; i += 50){
+      var chunk = paths.slice(i, i + 50);
+      var r = await supa.storage.from('media').remove(chunk);
+      if(!r.error) removed += chunk.length;
+    }
+    toast(removed ? ('Removed ' + removed + ' old story file' + (removed === 1 ? '' : 's') + ' - storage freed') : 'Could not remove them - try again');
+  } catch(e){
+    console.error(e);
+    toast('Could not clean up: ' + String((e && e.message) || e).slice(0, 90));
+  }
+}
+
 /* ---------------- Settings ---------------- */
 function renderSettings(){
   var darkOn = document.documentElement.classList.contains('dark');
@@ -4194,6 +4232,7 @@ function renderSettings(){
       + (me.is_admin ? row(ic.wallet, 'Payments to approve', 'showView(\'approvals\')', pendingPayments.length ? (pendingPayments.length + ' waiting') : 'None') : '')
       + row(ic.down, 'Install app', 'installApp()')
       + row(ic.book, 'Saved posts', 'openSaved()')
+      + row(ic.down, 'Free up storage', 'cleanOldStoryFiles()', 'Clean old stories')
     + '</div>'
     + '<div class="set-title">Privacy &amp; support</div>'
     + '<div class="set-group">'
