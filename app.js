@@ -124,6 +124,7 @@ let previewAudio = null;
 let previewingKey = null;
 let musicStartReady = null;  // audio_start column exists
 let musicVolumeReady = null; // posts.audio_volume column exists (song boost up to 200%)
+let storyVolumeReady = null; // stories.audio_volume column exists (separate table!)
 let storyLikesReady = null;  // story_likes table exists
 let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
@@ -203,9 +204,9 @@ async function afterLogin(){
   }
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
-    const probeBefore = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
+    const probeBefore = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
     runProbes().then(function(){
-      const probeAfter = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
+      const probeAfter = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
       if(probeBefore !== probeAfter) scheduleRefresh();
     });
   } else {
@@ -544,6 +545,11 @@ function audioFields(){
   if(!musicReady) return '';
   return ',audio_url,audio_title,audio_artist' + (musicStartReady ? ',audio_start' : '') + (musicVolumeReady ? ',audio_volume' : '');
 }
+/* stories is a DIFFERENT table - it must only ask for columns it really has */
+function storyAudioFields(){
+  if(!musicReady) return '';
+  return ',audio_url,audio_title,audio_artist' + (musicStartReady ? ',audio_start' : '') + (storyVolumeReady ? ',audio_volume' : '');
+}
 function mediaField(){
   if(!mediaUrlsReady) return '';
   return ',media_urls';
@@ -568,6 +574,12 @@ async function checkMusicStart(){
     const q = await supa.from('posts').select('audio_start').limit(1);
     musicStartReady = !q.error;
   } catch(e){ musicStartReady = false; }
+}
+async function checkStoryVolume(){
+  try {
+    const q = await supa.from('stories').select('audio_volume').limit(1);
+    storyVolumeReady = !q.error;
+  } catch(e){ storyVolumeReady = false; }
 }
 async function checkMusicVolume(){
   try {
@@ -615,7 +627,7 @@ async function checkMediaMsgV2(){
 /* ---- one parallel probe round instead of 7 sequential ones ---- */
 async function runProbes(){
   await Promise.all([
-    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMusicVolume(), checkMediaUrls(),
+    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMusicVolume(), checkStoryVolume(), checkMediaUrls(),
     checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2(), checkStoryText(), checkBadges()
   ]);
   saveProbeCache();
@@ -629,6 +641,7 @@ function loadProbeCache(){
     songsReady = probeCache.songsReady;
     musicStartReady = probeCache.musicStartReady;
     musicVolumeReady = probeCache.musicVolumeReady;
+    storyVolumeReady = probeCache.storyVolumeReady;
     storyLikesReady = probeCache.storyLikesReady;
     mediaMsgReady = probeCache.mediaMsgReady;
     mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
@@ -641,7 +654,7 @@ function saveProbeCache(){
   try {
     localStorage.setItem('pulse-probes-v1', JSON.stringify({
       musicReady: musicReady, songsReady: songsReady,
-      musicStartReady: musicStartReady, musicVolumeReady: musicVolumeReady, storyLikesReady: storyLikesReady,
+      musicStartReady: musicStartReady, musicVolumeReady: musicVolumeReady, storyVolumeReady: storyVolumeReady, storyLikesReady: storyLikesReady,
       mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready,
       mediaUrlsReady: mediaUrlsReady,
       storyTextReady: storyTextReady,
@@ -748,7 +761,7 @@ async function fetchStories(){
   // Pro accounts' stories to 48h
   const since = new Date(Date.now() - 48*3600*1000).toISOString();
   const q = await supa.from('stories')
-    .select('id,user_id,image_url,created_at' + audioFields() + storyTextField() + ',profiles!stories_user_id_fkey(id,username,avatar_url)')
+    .select('id,user_id,image_url,created_at' + storyAudioFields() + storyTextField() + ',profiles!stories_user_id_fkey(id,username,avatar_url)')
     .gt('created_at', since)
     .order('created_at', { ascending: true })
     .limit(300);
@@ -3101,7 +3114,7 @@ async function publishCreate(){
         payload2.audio_title = pendingSong.title || null;
         payload2.audio_artist = pendingSong.artist || null;
         if(musicStartReady) payload2.audio_start = pendingSong.start || 0;
-        if(musicVolumeReady) payload2.audio_volume = pendingSong.vol || 1;
+        if(storyVolumeReady) payload2.audio_volume = pendingSong.vol || 1;
       }
       const r = await supa.from('stories').insert(payload2);
       if(r.error) throw r.error;
