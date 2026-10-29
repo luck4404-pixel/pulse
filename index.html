@@ -275,6 +275,7 @@
   .cm-d-info span{font-size:11.5px;color:var(--text-soft);}
   .cm-d-rm{border:1px solid var(--border);background:none;color:#ED4956;border-radius:8px;font-family:inherit;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer;}
   .cm-report{display:block;width:100%;background:none;border:none;color:#ED4956;font-family:inherit;font-size:11.5px;font-weight:600;padding:10px 0 2px;cursor:pointer;}
+  .cm-tel{display:inline-block;font-size:11.5px;font-weight:600;color:var(--accent-d);text-decoration:none;margin-top:3px;}
   .side-footer{margin-top:26px;font-size:11.5px;color:var(--text-faint);line-height:1.8;}
 
   /* ---------- Bottom nav (mobile) ---------- */
@@ -351,12 +352,12 @@
     width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);
     color:var(--text);padding:10px;font-size:14px;outline:none;
   }
-  .modal input[type="number"],.modal input[type="datetime-local"],.modal input:not([type]){
+  .modal input[type="number"],.modal input[type="datetime-local"],.modal input[type="tel"],.modal input:not([type]){
     width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;
     padding:10px 11px;font-family:inherit;font-size:14px;background:var(--bg);color:var(--text);
     outline:none;margin-bottom:4px;
   }
-  .modal input[type="number"]:focus,.modal input[type="datetime-local"]:focus,.modal input:not([type]):focus{border-color:var(--accent-d);}
+  .modal input[type="number"]:focus,.modal input[type="datetime-local"]:focus,.modal input[type="tel"]:focus,.modal input:not([type]):focus{border-color:var(--accent-d);}
   .modal input[type="email"],.modal input[type="password"]{
     width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg);
     color:var(--text);padding:10px;font-size:14px;outline:none;
@@ -1307,6 +1308,12 @@
       <img id="cm-photo-prev" alt="" style="display:none;width:100%;border-radius:10px;margin-top:8px;">
       <label class="field-label">When?</label>
       <input id="cm-when" type="datetime-local">
+      <label class="field-label">Your name</label>
+      <input id="cm-org-name" type="text" placeholder="Who is organising?">
+      <label class="field-label">Your age</label>
+      <input id="cm-org-age" type="number" min="5" max="110" placeholder="e.g. 21">
+      <label class="field-label">Mobile number (optional &mdash; people who open your activity can see and call it)</label>
+      <input id="cm-org-phone" type="tel" placeholder="e.g. 98765 43210">
       <label class="field-label">How many can come? (optional)</label>
       <input id="cm-max" type="number" min="2" max="200" placeholder="e.g. 10">
       <label class="field-label">Anything else? (optional)</label>
@@ -1500,6 +1507,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=74"></script>
+<script src="app.js?v=75"></script>
 </body>
 </html>

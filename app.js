@@ -4241,13 +4241,13 @@ async function loadCommunity(){
   try {
     var until = new Date(Date.now() + 5 * 60 * 1000).toISOString();   // an activity expires 5 min before it starts
     var q = await supa.from('community_posts')
-      .select('id,user_id,activity,place,starts_at,note,max_people,place_photo,created_at,profiles(id,username,display_name,avatar_url' + profileExtra() + ')')
+      .select('id,user_id,activity,place,starts_at,note,max_people,place_photo,org_name,org_age,org_phone,report_count,created_at,profiles(id,username,display_name,avatar_url' + profileExtra() + ')')
       .gt('starts_at', until)
       .order('starts_at', { ascending: true })
       .limit(60);
     if(q.error){ communityPosts = []; communityJoins = {}; return; }
     var hid = cmHiddenSet();
-    communityPosts = (q.data || []).filter(function(r){ return !hid.has(r.id); }).map(function(r){
+    communityPosts = (q.data || []).filter(function(r){ return !hid.has(r.id) && (r.report_count || 0) < 5; }).map(function(r){
       return {
         id: r.id, uid: r.user_id,
         user: (r.profiles && r.profiles.username) || 'user',
@@ -4256,6 +4256,8 @@ async function loadCommunity(){
         is_pro: !!(r.profiles && r.profiles.is_pro),
         activity: r.activity || '', place: r.place || '', starts: r.starts_at,
         note: r.note || '', max: r.max_people || 0, placePhoto: r.place_photo || null,
+        orgName: r.org_name || '', orgAge: r.org_age || null, orgPhone: r.org_phone || '',
+        reports: r.report_count || 0,
         dname: (r.profiles && r.profiles.display_name) || ''
       };
     });
@@ -4342,6 +4344,10 @@ function openCommunityPost(){
   ['cm-act', 'cm-place', 'cm-when', 'cm-max', 'cm-note'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value = '';
   });
+  var on = document.getElementById('cm-org-name');
+  if(on) on.value = (me.display_name || me.username || '');
+  var oa = document.getElementById('cm-org-age'); if(oa) oa.value = '';
+  var op = document.getElementById('cm-org-phone'); if(op) op.value = '';
   cmPlaceFile = null;
   var prev = document.getElementById('cm-photo-prev');
   if(prev){ prev.style.display = 'none'; prev.removeAttribute('src'); }
@@ -4375,6 +4381,13 @@ async function createCommunityPost(){
   var when = document.getElementById('cm-when').value;
   var maxRaw = document.getElementById('cm-max').value;
   var note = (document.getElementById('cm-note').value || '').trim();
+  var orgName = (document.getElementById('cm-org-name').value || '').trim();
+  var orgAgeRaw = document.getElementById('cm-org-age').value;
+  var orgPhone = (document.getElementById('cm-org-phone').value || '').trim();
+  var orgAge = parseInt(orgAgeRaw, 10);
+  if(!orgName){ toast('Your name - so people know who is organising'); return; }
+  if(!orgAge || orgAge < 5 || orgAge > 110){ toast('Your age'); return; }
+  if(orgPhone && !/^[0-9+\-\s()]{6,16}$/.test(orgPhone)){ toast('That mobile number does not look right'); return; }
   if(!activity){ toast('What is it? Basketball, Cricket...'); return; }
   if(!place){ toast('Where is it?'); return; }
   if(!when){ toast('When is it?'); return; }
@@ -4392,7 +4405,8 @@ async function createCommunityPost(){
       user_id: me.id, activity: activity, place: place,
       starts_at: starts.toISOString(), note: note || null,
       max_people: (isNaN(max) || max <= 0) ? null : max,
-      place_photo: placePhoto
+      place_photo: placePhoto,
+      org_name: orgName, org_age: orgAge, org_phone: orgPhone || null
     });
     if(r.error){ toast('Could not post: ' + String(r.error.message || '').slice(0, 80)); return; }
     closeCommunityPost();
@@ -4613,8 +4627,11 @@ function openCommunityDetail(id){
         + '<div class="cm-d-av">' + (p.avatar
             ? '<img src="' + p.avatar + '" alt="">'
             : '<span style="background:' + cmColor(p.user) + '">' + esc((p.user || '?').charAt(0).toUpperCase()) + '</span>') + '</div>'
-        + '<div class="cm-d-info"><b>' + esc(p.dname || p.user) + '</b>'
-          + '<span>' + proName('@' + p.user, p.is_pro) + tickFor({ badge: p.badge, is_pro: p.is_pro }, false) + '</span></div>'
+        + '<div class="cm-d-info"><b>' + esc(p.orgName || p.dname || p.user) + '</b>'
+          + '<span>' + proName('@' + p.user, p.is_pro) + tickFor({ badge: p.badge, is_pro: p.is_pro }, false)
+            + (p.orgAge ? ' &middot; ' + esc(String(p.orgAge)) + ' years' : '') + '</span>'
+          + (p.orgPhone ? '<a class="cm-tel" href="tel:' + esc(p.orgPhone) + '">' + esc(p.orgPhone) + '</a>' : '')
+        + '</div>'
       + '</div>'
     + '</div>'
     + (p.note ? '<div class="cm-note">' + esc(p.note) + '</div>' : '')
