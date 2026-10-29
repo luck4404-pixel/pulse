@@ -125,6 +125,7 @@ let previewingKey = null;
 let musicStartReady = null;  // audio_start column exists
 let musicVolumeReady = null; // posts.audio_volume column exists (song boost up to 200%)
 let storyVolumeReady = null; // stories.audio_volume column exists (separate table!)
+let communityReady = null;   // community_posts table exists
 let storyLikesReady = null;  // story_likes table exists
 let mediaMsgReady = null;    // media columns on messages exist
 let mediaMsgV2Ready = null;  // file_bytes + hidden_for columns exist
@@ -204,9 +205,9 @@ async function afterLogin(){
   }
   showView('feed'); // paint the feed area instantly while data loads
   if(probeCache){
-    const probeBefore = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
+    const probeBefore = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyVolumeReady, communityReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
     runProbes().then(function(){
-      const probeAfter = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyVolumeReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
+      const probeAfter = [musicReady, songsReady, musicStartReady, musicVolumeReady, storyVolumeReady, communityReady, storyLikesReady, mediaMsgReady, mediaMsgV2Ready, mediaUrlsReady, storyTextReady, badgesReady].join(',');
       if(probeBefore !== probeAfter) scheduleRefresh();
     });
   } else {
@@ -214,6 +215,7 @@ async function afterLogin(){
   }
   await Promise.all([loadFollows(), loadSavedIds(), loadPro(), loadSettings(), loadPayments()]);
   loadSuggestions(); // side column — never blocks the feed
+  loadCommunity();   // community strip — also never blocks
   await refreshData();
   setupRealtime();
   setupPresence();
@@ -575,6 +577,10 @@ async function checkMusicStart(){
     musicStartReady = !q.error;
   } catch(e){ musicStartReady = false; }
 }
+async function checkCommunity(){
+  try { const q = await supa.from('community_posts').select('id').limit(1); communityReady = !q.error; }
+  catch(e){ communityReady = false; }
+}
 async function checkStoryVolume(){
   try {
     const q = await supa.from('stories').select('audio_volume').limit(1);
@@ -627,7 +633,7 @@ async function checkMediaMsgV2(){
 /* ---- one parallel probe round instead of 7 sequential ones ---- */
 async function runProbes(){
   await Promise.all([
-    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMusicVolume(), checkStoryVolume(), checkMediaUrls(),
+    checkMusicColumns(), checkSongTable(), checkMusicStart(), checkMusicVolume(), checkStoryVolume(), checkCommunity(), checkMediaUrls(),
     checkStoryLikes(), checkMediaMsg(), checkMediaMsgV2(), checkStoryText(), checkBadges()
   ]);
   saveProbeCache();
@@ -642,6 +648,7 @@ function loadProbeCache(){
     musicStartReady = probeCache.musicStartReady;
     musicVolumeReady = probeCache.musicVolumeReady;
     storyVolumeReady = probeCache.storyVolumeReady;
+    communityReady = probeCache.communityReady;
     storyLikesReady = probeCache.storyLikesReady;
     mediaMsgReady = probeCache.mediaMsgReady;
     mediaMsgV2Ready = probeCache.mediaMsgV2Ready;
@@ -654,7 +661,7 @@ function saveProbeCache(){
   try {
     localStorage.setItem('pulse-probes-v1', JSON.stringify({
       musicReady: musicReady, songsReady: songsReady,
-      musicStartReady: musicStartReady, musicVolumeReady: musicVolumeReady, storyVolumeReady: storyVolumeReady, storyLikesReady: storyLikesReady,
+      musicStartReady: musicStartReady, musicVolumeReady: musicVolumeReady, storyVolumeReady: storyVolumeReady, communityReady: communityReady, storyLikesReady: storyLikesReady,
       mediaMsgReady: mediaMsgReady, mediaMsgV2Ready: mediaMsgV2Ready,
       mediaUrlsReady: mediaUrlsReady,
       storyTextReady: storyTextReady,
@@ -1201,7 +1208,7 @@ function renderFeed(force){
   if(!force && sig === lastFeedSig && col.querySelector('.post')) return;
   lastFeedSig = sig;
   col.innerHTML =
-    renderStories() + (posts.length ? posts.map(renderPost).join('') :
+    renderStories() + communityStrip() + (posts.length ? posts.map(renderPost).join('') :
     (feedLoaded
       ? (postsError
           ? '<div class="empty-note">Could not load posts.<br><span style="font-size:11.5px;color:var(--text-soft);">' + esc(String(postsError).slice(0, 140)) + '</span><br><br>Open Settings, then reload the app.</div>'
@@ -1855,7 +1862,7 @@ function viewProfile(username){
   currentView = 'otherProfile';
   lastViewedProfile = username;
   document.getElementById('app').classList.remove('full','wide');
-  ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(function(id){
+  ['nav-feed','nav-explore','nav-community','nav-reels','nav-profile'].forEach(function(id){
     const el = document.getElementById(id);
     if(el) el.classList.remove('active');
   });
@@ -1948,12 +1955,13 @@ function showView(v){
   document.body.classList.toggle('view-settings', v === 'settings' || v === 'pro' || v === 'approvals');
   const app = document.getElementById('app');
   app.classList.remove('full','wide');
-  ['nav-feed','nav-explore','nav-reels','nav-profile'].forEach(function(id){
+  ['nav-feed','nav-explore','nav-community','nav-reels','nav-profile'].forEach(function(id){
     const el = document.getElementById(id);
     if(el) el.classList.remove('active');
   });
   if(v === 'feed'){ renderFeed(true); markNav('nav-feed'); }
   else if(v === 'explore'){ renderExplore(); markNav('nav-explore'); }
+  else if(v === 'community'){ renderCommunity(); markNav('nav-community'); loadCommunity().then(function(){ if(currentView === 'community') renderCommunity(); }); }
   else if(v === 'reels'){ app.classList.add('full'); renderReels(); markNav('nav-reels'); }
   else if(v === 'messages'){ app.classList.add('wide'); renderMessages(); }
   else if(v === 'notifications'){ renderNotifications(); }
@@ -4176,6 +4184,420 @@ async function reviewPayment(id, approve){
     await loadPayments();
     renderApprovals();
   } catch(e){ console.error(e); toast('Could not update'); }
+}
+
+/* ---------------- Community board ---------------- */
+var communityPosts = [];
+var communityJoins = {};      // post_id -> [ {id,user_id,name,age,photo_url} ]
+var cJoinTarget = null;
+var camStream = null;
+var camShot = null;           // captured photo as a data URL
+var camPerson = null;         // true = person found, false = none, null = could not check
+var faceHuman = null;
+var faceLoading = null;
+var CM_ACTS = ['Basketball', 'Cricket', 'Football', 'Running', 'Cycling', 'Study', 'Music', 'Other'];
+
+function communityWhen(iso){
+  try {
+    var d = new Date(iso), now = new Date();
+    if(isNaN(d.getTime())) return '';
+    var hm = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+    var a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var b = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var diff = Math.round((b - a) / 86400000);
+    if(diff === 0) return 'Today ' + hm;
+    if(diff === 1) return 'Tomorrow ' + hm;
+    if(diff === -1) return 'Yesterday ' + hm;
+    return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hm;
+  } catch(e){ return ''; }
+}
+function cmColor(s){
+  var h = 0; s = String(s || 'x');
+  for(var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return 'hsl(' + h + ',45%,62%)';
+}
+function cmAvatars(joins){
+  var out = '';
+  joins.slice(0, 3).forEach(function(j){
+    if(j.photo_url) out += '<span class="ph" style="background-image:url(' + j.photo_url + ')"></span>';
+    else out += '<span style="background:' + cmColor(j.name) + '"></span>';
+  });
+  return out;
+}
+
+async function loadCommunity(){
+  if(communityReady === false){ communityPosts = []; communityJoins = {}; return; }
+  try {
+    var since = new Date(Date.now() - 3600 * 1000).toISOString();   // keep 1 hour after the start
+    var q = await supa.from('community_posts')
+      .select('id,user_id,activity,place,starts_at,note,max_people,created_at,profiles(id,username,avatar_url' + profileExtra() + ')')
+      .gt('starts_at', since)
+      .order('starts_at', { ascending: true })
+      .limit(60);
+    if(q.error){ communityPosts = []; communityJoins = {}; return; }
+    communityPosts = (q.data || []).map(function(r){
+      return {
+        id: r.id, uid: r.user_id,
+        user: (r.profiles && r.profiles.username) || 'user',
+        avatar: r.profiles ? r.profiles.avatar_url : null,
+        badge: r.profiles ? r.profiles.badge : null,
+        is_pro: !!(r.profiles && r.profiles.is_pro),
+        activity: r.activity || '', place: r.place || '', starts: r.starts_at,
+        note: r.note || '', max: r.max_people || 0
+      };
+    });
+    communityJoins = {};
+    var ids = communityPosts.map(function(p){ return p.id; });
+    if(ids.length){
+      var j = await supa.from('community_joins')
+        .select('id,post_id,user_id,name,age,photo_url,created_at')
+        .in('post_id', ids)
+        .order('created_at', { ascending: true });
+      if(!j.error){
+        (j.data || []).forEach(function(row){
+          if(!communityJoins[row.post_id]) communityJoins[row.post_id] = [];
+          communityJoins[row.post_id].push(row);
+        });
+      }
+    }
+  } catch(e){ communityPosts = []; communityJoins = {}; }
+}
+
+function renderCommunity(){
+  var col = document.getElementById('main-col');
+  if(!col) return;
+  if(communityReady === false){
+    col.innerHTML = '<div class="cm-wrap"><div class="cm-head"><h2>Community</h2></div>'
+      + '<div class="empty-note">Community needs a one-time setup.<br><span style="font-size:11.5px;color:var(--text-soft);">Run community.sql in Supabase, then reload.</span></div></div>';
+    return;
+  }
+  var head = '<div class="cm-wrap"><div class="cm-head"><h2>Community</h2>'
+    + '<button class="cm-new" onclick="openCommunityPost()">+ Post</button></div>'
+    + '<div class="cm-sub">What&rsquo;s happening near you</div>';
+  if(!communityPosts.length){
+    col.innerHTML = head + '<div class="empty-note">Nothing planned yet.<br>Be the first &mdash; tap + Post.</div></div>';
+    return;
+  }
+  col.innerHTML = head + communityPosts.map(cmCard).join('') + '</div>';
+}
+
+function cmCard(p){
+  var joins = communityJoins[p.id] || [];
+  var mine = joins.some(function(j){ return j.user_id === me.id; });
+  var full = p.max > 0 && joins.length >= p.max && !mine;
+  var btn;
+  if(mine) btn = '<button class="cm-join on" onclick="event.stopPropagation();leaveCommunity(\'' + p.id + '\')">Going &#10003;</button>';
+  else if(full) btn = '<button class="cm-join full" disabled>Full</button>';
+  else btn = '<button class="cm-join" onclick="event.stopPropagation();openCommunityJoin(\'' + p.id + '\')">Join</button>';
+  return '<div class="cm-card" onclick="openCommunityDetail(\'' + p.id + '\')">'
+    + '<div class="cm-row">'
+      + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
+      + '<div class="cm-main">'
+        + '<div class="cm-title">' + esc(p.activity) + '</div>'
+        + '<div class="cm-meta">' + esc(communityWhen(p.starts)) + ' &middot; ' + esc(p.place) + '</div>'
+        + '<div class="cm-going"><span class="cm-avs">' + cmAvatars(joins) + '</span>'
+          + joins.length + ' going' + (p.max ? ' of ' + p.max : '') + '</div>'
+      + '</div>'
+      + btn
+    + '</div>'
+    + (p.note ? '<div class="cm-note">' + esc(p.note) + '</div>' : '')
+  + '</div>';
+}
+
+function communityStrip(){
+  if(communityReady === false || !communityPosts.length) return '';
+  var top = communityPosts.slice(0, 2);
+  return '<div class="cm-strip">'
+    + '<div class="cm-strip-head"><b>Happening near you</b><u onclick="showView(\'community\')">See all</u></div>'
+    + '<div class="cm-strip-row">'
+      + top.map(function(p){
+          var n = (communityJoins[p.id] || []).length;
+          return '<div class="cm-mini" onclick="showView(\'community\')">'
+            + '<div class="cm-mini-t">' + esc(p.activity) + '</div>'
+            + '<div class="cm-mini-m">' + esc(communityWhen(p.starts)) + '<br>' + esc(p.place) + '</div>'
+            + '<div class="cm-mini-g">' + n + ' going</div>'
+          + '</div>';
+        }).join('')
+    + '</div></div>';
+}
+
+/* ---------- post a new activity ---------- */
+function openCommunityPost(){
+  if(communityReady === false){ toast('Run community.sql in Supabase first'); return; }
+  ['cm-act', 'cm-place', 'cm-when', 'cm-max', 'cm-note'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  var chips = document.getElementById('cm-chips');
+  if(chips) chips.innerHTML = CM_ACTS.map(function(x){
+    return '<button type="button" class="cm-chip" onclick="cmPickAct(\'' + x + '\')">' + x + '</button>';
+  }).join('');
+  document.getElementById('cm-post-modal').classList.add('open');
+}
+function cmPickAct(x){
+  var el = document.getElementById('cm-act');
+  if(el){ el.value = (x === 'Other' ? '' : x); el.focus(); }
+}
+function closeCommunityPost(){ document.getElementById('cm-post-modal').classList.remove('open'); }
+async function createCommunityPost(){
+  var activity = (document.getElementById('cm-act').value || '').trim();
+  var place = (document.getElementById('cm-place').value || '').trim();
+  var when = document.getElementById('cm-when').value;
+  var maxRaw = document.getElementById('cm-max').value;
+  var note = (document.getElementById('cm-note').value || '').trim();
+  if(!activity){ toast('What is it? Basketball, Cricket...'); return; }
+  if(!place){ toast('Where is it?'); return; }
+  if(!when){ toast('When is it?'); return; }
+  var starts = new Date(when);
+  if(isNaN(starts.getTime())){ toast('That date and time did not read right'); return; }
+  if(starts.getTime() < Date.now() - 60000){ toast('That time has already passed'); return; }
+  var max = parseInt(maxRaw, 10);
+  try {
+    var r = await supa.from('community_posts').insert({
+      user_id: me.id, activity: activity, place: place,
+      starts_at: starts.toISOString(), note: note || null,
+      max_people: (isNaN(max) || max <= 0) ? null : max
+    });
+    if(r.error){ toast('Could not post: ' + String(r.error.message || '').slice(0, 80)); return; }
+    closeCommunityPost();
+    await loadCommunity();
+    renderCommunity();
+    toast('Posted to Community');
+  } catch(e){ console.error(e); toast('Could not post'); }
+}
+
+/* ---------- join ---------- */
+function openCommunityJoin(id){
+  var p = null;
+  for(var i = 0; i < communityPosts.length; i++){ if(communityPosts[i].id === id) p = communityPosts[i]; }
+  if(!p) return;
+  cJoinTarget = id;
+  cmCamReset();
+  document.getElementById('cm-join-title').textContent = 'Join ' + p.activity;
+  document.getElementById('cm-join-meta').textContent = communityWhen(p.starts) + ' \u00b7 ' + p.place;
+  document.getElementById('cm-join-name').value = (me.display_name || me.username || '');
+  document.getElementById('cm-join-age').value = '';
+  var go = document.getElementById('cm-join-go');
+  go.disabled = false; go.textContent = "Confirm \u2014 I'm coming";
+  document.getElementById('cm-join-modal').classList.add('open');
+}
+function closeCommunityJoin(){
+  stopCam();
+  document.getElementById('cm-join-modal').classList.remove('open');
+  cJoinTarget = null;
+}
+
+/* ---------- live camera photo ---------- */
+async function cmCamStart(){
+  try {
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      toast('This device cannot open the camera - you can join without a photo');
+      return;
+    }
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } }, audio: false
+    });
+    var v = document.getElementById('cm-cam-video');
+    v.srcObject = camStream;
+    v.style.display = 'block';
+    document.getElementById('cm-cam-live').style.display = 'block';
+    document.getElementById('cm-cam-shot').style.display = 'none';
+    var op = document.getElementById('cm-cam-open'); if(op) op.style.display = 'none';
+    var rt = document.getElementById('cm-cam-retake'); if(rt) rt.style.display = 'block';
+    try { await v.play(); } catch(e){}
+  } catch(e){
+    toast('Camera not allowed - you can still join without a photo');
+  }
+}
+function stopCam(){
+  if(camStream){ try { camStream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){} camStream = null; }
+  var v = document.getElementById('cm-cam-video');
+  if(v){ try { v.pause(); v.srcObject = null; } catch(e){} v.style.display = 'none'; }
+  var live = document.getElementById('cm-cam-live');
+  if(live) live.style.display = 'none';
+}
+function cmCamReset(){
+  camShot = null; camPerson = null;
+  var shot = document.getElementById('cm-cam-shot');
+  if(shot){ shot.style.display = 'none'; shot.removeAttribute('src'); }
+  var st = document.getElementById('cm-cam-status');
+  if(st){ st.textContent = ''; st.className = 'cm-cam-status'; }
+  var go = document.getElementById('cm-join-go');
+  if(go) go.disabled = false;
+  var op2 = document.getElementById('cm-cam-open'); if(op2) op2.style.display = 'block';
+  var rt2 = document.getElementById('cm-cam-retake'); if(rt2) rt2.style.display = 'none';
+  stopCam();
+}
+async function cmCamCapture(){
+  var v = document.getElementById('cm-cam-video');
+  if(!v || !v.videoWidth){ toast('Camera is still starting'); return; }
+  var side = Math.min(v.videoWidth, v.videoHeight);
+  var c = document.createElement('canvas');
+  c.width = 480; c.height = 480;
+  var ctx = c.getContext('2d');
+  ctx.drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, 480, 480);
+  camShot = c.toDataURL('image/jpeg', 0.85);
+  stopCam();
+  var shot = document.getElementById('cm-cam-shot');
+  shot.src = camShot; shot.style.display = 'block';
+  var st = document.getElementById('cm-cam-status');
+  var go = document.getElementById('cm-join-go');
+  st.className = 'cm-cam-status checking';
+  st.textContent = 'Checking the photo...';
+  camPerson = await cmPersonIn(c);
+  if(camPerson === true){
+    st.className = 'cm-cam-status ok';
+    st.textContent = 'Person detected \u2014 good to go';
+    if(go) go.disabled = false;
+  } else if(camPerson === false){
+    st.className = 'cm-cam-status bad';
+    st.textContent = 'No person found in the photo. Take it again.';
+    if(go) go.disabled = true;
+  } else {
+    st.className = 'cm-cam-status warn';
+    st.textContent = 'Photo added. (This device could not run the person check.)';
+    if(go) go.disabled = false;
+  }
+}
+
+/* the face detector is only downloaded when somebody actually adds a photo */
+function cmLoadFace(){
+  if(faceHuman) return Promise.resolve(faceHuman);
+  if(faceLoading) return faceLoading;
+  faceLoading = new Promise(function(resolve){
+    var settled = false;
+    function give(v){ if(!settled){ settled = true; resolve(v); } }
+    setTimeout(function(){ give(null); }, 20000);          // never hang the join flow
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/human@3.3.4/dist/human.js';
+    s.onerror = function(){ give(null); };
+    s.onload = function(){
+      try {
+        var Ctor = (window.Human && (window.Human.Human || window.Human.default)) || window.Human;
+        if(!Ctor) return give(null);
+        var h = new Ctor({
+          modelBasePath: 'https://cdn.jsdelivr.net/gh/vladmandic/human-models/models/',
+          backend: 'cpu', debug: false,
+          face: {
+            enabled: true, maxDetected: 3,
+            detector: { modelPath: 'blazeface.json' },
+            mesh: { enabled: false }, iris: { enabled: false },
+            description: { enabled: false }, emotion: { enabled: false },
+            antispoof: { enabled: false }, liveness: { enabled: false }, gear: { enabled: false }
+          },
+          body: { enabled: false }, hand: { enabled: false },
+          object: { enabled: false }, gesture: { enabled: false }
+        });
+        h.load().then(function(){ faceHuman = h; give(h); }, function(){ give(null); });
+      } catch(e){ give(null); }
+    };
+    document.head.appendChild(s);
+  });
+  return faceLoading;
+}
+async function cmPersonIn(canvas){
+  try {
+    var h = await cmLoadFace();
+    if(!h) return null;
+    var res = await h.detect(canvas);
+    return !!(res && res.face && res.face.length > 0);
+  } catch(e){ return null; }
+}
+function cmDataFile(dataUrl){
+  var parts = String(dataUrl).split(',');
+  var mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  var bin = atob(parts[1]);
+  var u8 = new Uint8Array(bin.length);
+  for(var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new File([u8], 'join.jpg', { type: mime });
+}
+async function joinCommunityConfirm(){
+  var p = null;
+  for(var i = 0; i < communityPosts.length; i++){ if(communityPosts[i].id === cJoinTarget) p = communityPosts[i]; }
+  if(!p) return;
+  var name = (document.getElementById('cm-join-name').value || '').trim();
+  var age = parseInt(document.getElementById('cm-join-age').value, 10);
+  if(!name){ toast('Please put your name'); return; }
+  if(!age || age < 5 || age > 110){ toast('Please put your age'); return; }
+  if(camShot && camPerson === false){ toast('Take the photo again with a person in it'); return; }
+  var btn = document.getElementById('cm-join-go');
+  btn.disabled = true; btn.textContent = 'Joining...';
+  try {
+    var photoUrl = null;
+    if(camShot){
+      try { photoUrl = await uploadImage(cmDataFile(camShot)); }
+      catch(e){ toast('Photo could not upload - joining without it'); }
+    }
+    var r = await supa.from('community_joins').insert({
+      post_id: p.id, user_id: me.id, name: name, age: age, photo_url: photoUrl
+    });
+    if(r.error){
+      var m = String(r.error.message || '');
+      toast(/duplicate|unique/i.test(m) ? 'You already joined this' : ('Could not join: ' + m.slice(0, 80)));
+      btn.disabled = false; btn.textContent = "Confirm \u2014 I'm coming";
+      return;
+    }
+    if(p.uid && p.uid !== me.id){
+      supa.from('notifications').insert({ user_id: p.uid, actor_id: me.id, type: 'community_join' })
+        .then(function(){}, function(err){ console.error(err); });
+    }
+    closeCommunityJoin();
+    await loadCommunity();
+    renderCommunity();
+    toast("You're in - see you there");
+  } catch(e){
+    console.error(e);
+    btn.disabled = false; btn.textContent = "Confirm \u2014 I'm coming";
+    toast('Could not join');
+  }
+}
+async function leaveCommunity(id){
+  if(!confirm('Take your name off this activity?')) return;
+  var r = await supa.from('community_joins').delete().eq('post_id', id).eq('user_id', me.id);
+  if(r.error){ toast('Could not leave'); return; }
+  await loadCommunity(); renderCommunity(); toast('You left');
+}
+
+/* ---------- who is coming ---------- */
+function openCommunityDetail(id){
+  var p = null;
+  for(var i = 0; i < communityPosts.length; i++){ if(communityPosts[i].id === id) p = communityPosts[i]; }
+  if(!p) return;
+  var joins = communityJoins[id] || [];
+  var mine = p.uid === me.id;
+  var body = '<div class="cm-d-head">'
+    + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
+    + '<div><div class="cm-title">' + esc(p.activity) + '</div>'
+      + '<div class="cm-meta">' + esc(communityWhen(p.starts)) + ' &middot; ' + esc(p.place) + '</div></div>'
+    + '</div>'
+    + (p.note ? '<div class="cm-note">' + esc(p.note) + '</div>' : '')
+    + '<div class="cm-d-label">Who&rsquo;s coming (' + joins.length + (p.max ? ' of ' + p.max : '') + ')</div>';
+  if(!joins.length){
+    body += '<div class="cm-d-empty">Nobody yet &mdash; be the first.</div>';
+  } else {
+    body += joins.map(function(j){
+      var av = j.photo_url
+        ? '<img src="' + j.photo_url + '" alt="">'
+        : '<span style="background:' + cmColor(j.name) + '">' + esc((j.name || '?').charAt(0).toUpperCase()) + '</span>';
+      var who = (j.age ? esc(String(j.age)) + ' years' : '') + (j.user_id === me.id ? (j.age ? ' &middot; you' : 'you') : '');
+      return '<div class="cm-d-row"><div class="cm-d-av">' + av + '</div>'
+        + '<div class="cm-d-info"><b>' + esc(j.name) + '</b><span>' + who + '</span></div>'
+        + (mine && j.user_id !== me.id ? '<button class="cm-d-rm" onclick="removeCommunityJoin(\'' + j.id + '\')">Remove</button>' : '')
+      + '</div>';
+    }).join('');
+  }
+  body += '<button class="ghost-btn" onclick="closeCommunityDetail()">Close</button>';
+  document.getElementById('cm-detail-body').innerHTML = body;
+  document.getElementById('cm-detail-modal').classList.add('open');
+}
+function closeCommunityDetail(){ document.getElementById('cm-detail-modal').classList.remove('open'); }
+async function removeCommunityJoin(joinId){
+  if(!confirm('Remove this person from your activity?')) return;
+  var r = await supa.from('community_joins').delete().eq('id', joinId);
+  if(r.error){ toast('Could not remove'); return; }
+  await loadCommunity();
+  closeCommunityDetail();
+  renderCommunity();
+  toast('Removed');
 }
 
 /* ---------------- Free up storage ---------------- */
