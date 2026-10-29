@@ -2322,6 +2322,13 @@ async function deleteStoryItem(){
   const item = svUser.items[svIndex];
   const r = await supa.from('stories').delete().eq('id', item.id);
   if(r.error){ toast('Could not delete the story'); return; }
+  // free the photo (and its own audio) so it does not sit in storage for ever
+  try {
+    var stPaths = [item.img, item.audio].map(storagePathFromUrl).filter(Boolean)
+      .filter(function(v, i, arr){ return arr.indexOf(v) === i; })
+      .filter(function(p){ return p.indexOf(me.id + '/') === 0; });   // never touch shared songs
+    if(stPaths.length) await supa.storage.from('media').remove(stPaths);
+  } catch(e){}
   svUser.items.splice(svIndex, 1);
   if(svUser.items.length === 0){
     delete storiesByUser[me.username];
@@ -3170,6 +3177,7 @@ async function saveProfile(){
   if(newName) updates.display_name = newName;
   if(newUsername && newUsername !== me.username) updates.username = newUsername;
   if(typeof newBio === 'string') updates.bio = newBio || null;
+  const oldAvatar = me.avatar_url;
   if(pendingAvatarFile){
     try { updates.avatar_url = await uploadImage(pendingAvatarFile); } catch(err){ console.error(err); }
   }
@@ -3182,7 +3190,16 @@ async function saveProfile(){
   if(updates.username) me.username = updates.username;
   if(updates.display_name !== undefined) me.display_name = updates.display_name;
   if(updates.bio !== undefined) me.bio = updates.bio;
-  if(updates.avatar_url) me.avatar_url = updates.avatar_url;
+  if(updates.avatar_url){
+    // the previous picture is no longer used - remove it so it does not pile up
+    try {
+      var oldPath = storagePathFromUrl(oldAvatar);
+      if(oldPath && oldPath.indexOf(me.id + '/') === 0 && oldPath !== storagePathFromUrl(updates.avatar_url)){
+        await supa.storage.from('media').remove([oldPath]);
+      }
+    } catch(e){}
+    me.avatar_url = updates.avatar_url;
+  }
   updateMeUI();
   closeEditProfile();
   await refreshData();
