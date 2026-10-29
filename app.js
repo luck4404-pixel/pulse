@@ -4194,6 +4194,7 @@ var camStream = null;
 var camShot = null;           // captured photo as a data URL
 var camPerson = null;         // true = person found, false = none, null = could not check
 var cmPlaceFile = null;       // photo of the place chosen while posting
+var cmHidden = null;          // activities this person reported / hid
 var faceHuman = null;
 var faceLoading = null;
 var CM_ACTS = ['Basketball', 'Cricket', 'Football', 'Running', 'Cycling', 'Study', 'Music', 'Other'];
@@ -4226,6 +4227,15 @@ function cmAvatars(joins){
   return out;
 }
 
+function cmHiddenSet(){
+  if(cmHidden) return cmHidden;
+  try { cmHidden = new Set(JSON.parse(localStorage.getItem('pulse-cm-hidden') || '[]')); }
+  catch(e){ cmHidden = new Set(); }
+  return cmHidden;
+}
+function cmSaveHidden(){
+  try { localStorage.setItem('pulse-cm-hidden', JSON.stringify(Array.from(cmHiddenSet()))); } catch(e){}
+}
 async function loadCommunity(){
   if(communityReady === false){ communityPosts = []; communityJoins = {}; return; }
   try {
@@ -4236,7 +4246,8 @@ async function loadCommunity(){
       .order('starts_at', { ascending: true })
       .limit(60);
     if(q.error){ communityPosts = []; communityJoins = {}; return; }
-    communityPosts = (q.data || []).map(function(r){
+    var hid = cmHiddenSet();
+    communityPosts = (q.data || []).filter(function(r){ return !hid.has(r.id); }).map(function(r){
       return {
         id: r.id, uid: r.user_id,
         user: (r.profiles && r.profiles.username) || 'user',
@@ -4623,10 +4634,27 @@ function openCommunityDetail(id){
     }).join('');
   }
   body += '<button class="ghost-btn" onclick="closeCommunityDetail()">Close</button>';
+  if(!mine) body += '<button class="cm-report" onclick="reportCommunity(\'' + p.id + '\')">Report this activity</button>';
   document.getElementById('cm-detail-body').innerHTML = body;
   document.getElementById('cm-detail-modal').classList.add('open');
 }
 function closeCommunityDetail(){ document.getElementById('cm-detail-modal').classList.remove('open'); }
+async function reportCommunity(id){
+  if(!confirm('Report this activity? It will be hidden for you and the organiser will see the report.')) return;
+  try {
+    var r = await supa.from('community_reports').insert({ post_id: id, user_id: me.id, reason: 'reported' });
+    if(r.error && !/duplicate|unique/i.test(String(r.error.message || ''))){
+      toast('Could not send the report: ' + String(r.error.message || '').slice(0, 70));
+      return;
+    }
+  } catch(e){ console.error(e); toast('Could not send the report'); return; }
+  cmHiddenSet().add(id);
+  cmSaveHidden();
+  closeCommunityDetail();
+  await loadCommunity();
+  renderCommunity();
+  toast('Reported - hidden for you');
+}
 async function removeCommunityJoin(joinId){
   if(!confirm('Remove this person from your activity?')) return;
   var r = await supa.from('community_joins').delete().eq('id', joinId);
