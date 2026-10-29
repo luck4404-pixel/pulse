@@ -4193,6 +4193,7 @@ var cJoinTarget = null;
 var camStream = null;
 var camShot = null;           // captured photo as a data URL
 var camPerson = null;         // true = person found, false = none, null = could not check
+var cmPlaceFile = null;       // photo of the place chosen while posting
 var faceHuman = null;
 var faceLoading = null;
 var CM_ACTS = ['Basketball', 'Cricket', 'Football', 'Running', 'Cycling', 'Study', 'Music', 'Other'];
@@ -4228,10 +4229,10 @@ function cmAvatars(joins){
 async function loadCommunity(){
   if(communityReady === false){ communityPosts = []; communityJoins = {}; return; }
   try {
-    var since = new Date(Date.now() - 3600 * 1000).toISOString();   // keep 1 hour after the start
+    var until = new Date(Date.now() + 5 * 60 * 1000).toISOString();   // an activity expires 5 min before it starts
     var q = await supa.from('community_posts')
-      .select('id,user_id,activity,place,starts_at,note,max_people,created_at,profiles(id,username,avatar_url' + profileExtra() + ')')
-      .gt('starts_at', since)
+      .select('id,user_id,activity,place,starts_at,note,max_people,place_photo,created_at,profiles(id,username,display_name,avatar_url' + profileExtra() + ')')
+      .gt('starts_at', until)
       .order('starts_at', { ascending: true })
       .limit(60);
     if(q.error){ communityPosts = []; communityJoins = {}; return; }
@@ -4243,7 +4244,8 @@ async function loadCommunity(){
         badge: r.profiles ? r.profiles.badge : null,
         is_pro: !!(r.profiles && r.profiles.is_pro),
         activity: r.activity || '', place: r.place || '', starts: r.starts_at,
-        note: r.note || '', max: r.max_people || 0
+        note: r.note || '', max: r.max_people || 0, placePhoto: r.place_photo || null,
+        dname: (r.profiles && r.profiles.display_name) || ''
       };
     });
     communityJoins = {};
@@ -4290,13 +4292,15 @@ function cmCard(p){
   else if(full) btn = '<button class="cm-join full" disabled>Full</button>';
   else btn = '<button class="cm-join" onclick="event.stopPropagation();openCommunityJoin(\'' + p.id + '\')">Join</button>';
   return '<div class="cm-card" onclick="openCommunityDetail(\'' + p.id + '\')">'
+    + (p.placePhoto ? '<img class="cm-banner" src="' + p.placePhoto + '" alt="">' : '')
     + '<div class="cm-row">'
       + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
       + '<div class="cm-main">'
         + '<div class="cm-title">' + esc(p.activity) + '</div>'
         + '<div class="cm-meta">' + esc(communityWhen(p.starts)) + ' &middot; ' + esc(p.place) + '</div>'
         + '<div class="cm-going"><span class="cm-avs">' + cmAvatars(joins) + '</span>'
-          + joins.length + ' going' + (p.max ? ' of ' + p.max : '') + '</div>'
+          + joins.length + ' going' + (p.max ? ' of ' + p.max : '')
+          + ' &middot; by ' + proName(p.user, p.is_pro) + tickFor({ badge: p.badge, is_pro: p.is_pro }, false) + '</div>'
       + '</div>'
       + btn
     + '</div>'
@@ -4327,11 +4331,27 @@ function openCommunityPost(){
   ['cm-act', 'cm-place', 'cm-when', 'cm-max', 'cm-note'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value = '';
   });
+  cmPlaceFile = null;
+  var prev = document.getElementById('cm-photo-prev');
+  if(prev){ prev.style.display = 'none'; prev.removeAttribute('src'); }
+  var pb = document.getElementById('cm-photo-btn');
+  if(pb) pb.textContent = 'Add a photo of the place';
+  var pin = document.getElementById('cm-photo');
+  if(pin) pin.value = '';
   var chips = document.getElementById('cm-chips');
   if(chips) chips.innerHTML = CM_ACTS.map(function(x){
     return '<button type="button" class="cm-chip" onclick="cmPickAct(\'' + x + '\')">' + x + '</button>';
   }).join('');
   document.getElementById('cm-post-modal').classList.add('open');
+}
+function cmPickPhoto(inp){
+  var f = (inp.files && inp.files[0]) || null;
+  if(!f) return;
+  cmPlaceFile = f;
+  var prev = document.getElementById('cm-photo-prev');
+  if(prev){ prev.src = URL.createObjectURL(f); prev.style.display = 'block'; }
+  var pb = document.getElementById('cm-photo-btn');
+  if(pb) pb.textContent = 'Change the photo';
 }
 function cmPickAct(x){
   var el = document.getElementById('cm-act');
@@ -4349,13 +4369,19 @@ async function createCommunityPost(){
   if(!when){ toast('When is it?'); return; }
   var starts = new Date(when);
   if(isNaN(starts.getTime())){ toast('That date and time did not read right'); return; }
-  if(starts.getTime() < Date.now() - 60000){ toast('That time has already passed'); return; }
+  if(starts.getTime() < Date.now() + 5 * 60 * 1000){ toast('Pick a time at least 5 minutes from now'); return; }
   var max = parseInt(maxRaw, 10);
   try {
+    var placePhoto = null;
+    if(cmPlaceFile){
+      try { placePhoto = await uploadImage(cmPlaceFile); }
+      catch(e){ toast('Place photo could not upload - posting without it'); }
+    }
     var r = await supa.from('community_posts').insert({
       user_id: me.id, activity: activity, place: place,
       starts_at: starts.toISOString(), note: note || null,
-      max_people: (isNaN(max) || max <= 0) ? null : max
+      max_people: (isNaN(max) || max <= 0) ? null : max,
+      place_photo: placePhoto
     });
     if(r.error){ toast('Could not post: ' + String(r.error.message || '').slice(0, 80)); return; }
     closeCommunityPost();
@@ -4564,10 +4590,21 @@ function openCommunityDetail(id){
   if(!p) return;
   var joins = communityJoins[id] || [];
   var mine = p.uid === me.id;
-  var body = '<div class="cm-d-head">'
+  var body = (p.placePhoto ? '<img class="cm-banner tall" src="' + p.placePhoto + '" alt="">' : '')
+    + '<div class="cm-d-head">'
     + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
     + '<div><div class="cm-title">' + esc(p.activity) + '</div>'
-      + '<div class="cm-meta">' + esc(communityWhen(p.starts)) + ' &middot; ' + esc(p.place) + '</div></div>'
+      + '<div class="cm-meta">' + esc(communityWhen(p.starts)) + ' &middot;' + ' ' + esc(p.place) + '</div></div>'
+    + '</div>'
+    + '<div class="cm-org">'
+      + '<div class="cm-org-lbl">Organiser</div>'
+      + '<div class="cm-d-row" style="border-bottom:none;padding:4px 0;">'
+        + '<div class="cm-d-av">' + (p.avatar
+            ? '<img src="' + p.avatar + '" alt="">'
+            : '<span style="background:' + cmColor(p.user) + '">' + esc((p.user || '?').charAt(0).toUpperCase()) + '</span>') + '</div>'
+        + '<div class="cm-d-info"><b>' + esc(p.dname || p.user) + '</b>'
+          + '<span>' + proName('@' + p.user, p.is_pro) + tickFor({ badge: p.badge, is_pro: p.is_pro }, false) + '</span></div>'
+      + '</div>'
     + '</div>'
     + (p.note ? '<div class="cm-note">' + esc(p.note) + '</div>' : '')
     + '<div class="cm-d-label">Who&rsquo;s coming (' + joins.length + (p.max ? ' of ' + p.max : '') + ')</div>';

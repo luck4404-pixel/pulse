@@ -236,6 +236,10 @@
   .cm-join.on{background:rgba(34,197,94,.14);color:#15803d;}
   .cm-join.full{background:var(--bg);color:var(--text-soft);}
   .cm-note{font-size:11.5px;color:var(--text-soft);margin-top:9px;padding-top:9px;border-top:1px solid var(--border);line-height:1.45;}
+  .cm-banner{width:100%;height:118px;object-fit:cover;border-radius:10px;margin-bottom:11px;display:block;background:var(--bg);}
+  .cm-banner.tall{height:168px;}
+  .cm-org{border:1px solid var(--border);border-radius:12px;padding:8px 11px 4px;margin:10px 0 2px;background:var(--bg);}
+  .cm-org-lbl{font-size:10px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em;}
   .cm-strip{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 0 12px;}
   .cm-strip-head{display:flex;align-items:center;justify-content:space-between;padding:0 14px 8px;}
   .cm-strip-head b{font-size:12.5px;letter-spacing:-.01em;}
@@ -1296,6 +1300,10 @@
       <input id="cm-act" type="text" placeholder="Basketball">
       <label class="field-label">Where?</label>
       <input id="cm-place" type="text" placeholder="City Park, near the gate">
+      <label class="field-label">Photo of the place (optional)</label>
+      <input type="file" id="cm-photo" accept="image/*" onchange="cmPickPhoto(this)" style="display:none;">
+      <button type="button" class="ghost-btn" id="cm-photo-btn" onclick="document.getElementById('cm-photo').click()">Add a photo of the place</button>
+      <img id="cm-photo-prev" alt="" style="display:none;width:100%;border-radius:10px;margin-top:8px;">
       <label class="field-label">When?</label>
       <input id="cm-when" type="datetime-local">
       <label class="field-label">How many can come? (optional)</label>
@@ -1491,6 +1499,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=72"></script>
+<script src="app.js?v=73"></script>
 </body>
 </html>
