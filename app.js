@@ -4195,6 +4195,7 @@ var camShot = null;           // captured photo as a data URL
 var camPerson = null;         // true = person found, false = none, null = could not check
 var cmPlaceFile = null;       // photo of the place chosen while posting
 var cmHidden = null;          // activities this person reported / hid
+var communityHidden = [];     // activities removed by 5+ reports (owner can restore)
 var faceHuman = null;
 var faceLoading = null;
 var CM_ACTS = ['Basketball', 'Cricket', 'Football', 'Running', 'Cycling', 'Study', 'Music', 'Other'];
@@ -4247,7 +4248,7 @@ async function loadCommunity(){
       .limit(60);
     if(q.error){ communityPosts = []; communityJoins = {}; return; }
     var hid = cmHiddenSet();
-    communityPosts = (q.data || []).filter(function(r){ return !hid.has(r.id) && (r.report_count || 0) < 5; }).map(function(r){
+    var allCm = (q.data || []).map(function(r){
       return {
         id: r.id, uid: r.user_id,
         user: (r.profiles && r.profiles.username) || 'user',
@@ -4261,6 +4262,8 @@ async function loadCommunity(){
         dname: (r.profiles && r.profiles.display_name) || ''
       };
     });
+    communityPosts = allCm.filter(function(p){ return !hid.has(p.id) && p.reports < 5; });
+    communityHidden = allCm.filter(function(p){ return p.reports >= 5; });
     communityJoins = {};
     var ids = communityPosts.map(function(p){ return p.id; });
     if(ids.length){
@@ -4289,11 +4292,24 @@ function renderCommunity(){
   var head = '<div class="cm-wrap"><div class="cm-head"><h2>Community</h2>'
     + '<button class="cm-new" onclick="openCommunityPost()">+ Post</button></div>'
     + '<div class="cm-sub">What&rsquo;s happening near you</div>';
-  if(!communityPosts.length){
+  var ownerHasRemoved = !!(me && me.is_admin && communityHidden.length);
+  if(!communityPosts.length && !ownerHasRemoved){
     col.innerHTML = head + '<div class="empty-note">Nothing planned yet.<br>Be the first &mdash; tap + Post.</div></div>';
     return;
   }
-  col.innerHTML = head + communityPosts.map(cmCard).join('') + '</div>';
+  var removed = '';
+  if(me && me.is_admin && communityHidden.length){
+    removed = '<div class="cm-removed"><div class="cm-removed-lbl">Removed by reports (' + communityHidden.length + ')</div>'
+      + communityHidden.map(function(p){
+          return '<div class="cm-removed-row">'
+            + '<div class="cm-removed-main"><b>' + esc(p.activity) + '</b>'
+              + '<span>' + esc(communityWhen(p.starts)) + ' &middot; ' + esc(p.place) + ' &middot; ' + p.reports + ' reports</span></div>'
+            + '<button class="cm-restore" onclick="restoreCommunity(\'' + p.id + '\')">Restore</button>'
+          + '</div>';
+        }).join('')
+      + '</div>';
+  }
+  col.innerHTML = head + communityPosts.map(cmCard).join('') + removed + '</div>';
 }
 
 function cmCard(p){
@@ -4656,6 +4672,16 @@ function openCommunityDetail(id){
   document.getElementById('cm-detail-modal').classList.add('open');
 }
 function closeCommunityDetail(){ document.getElementById('cm-detail-modal').classList.remove('open'); }
+async function restoreCommunity(id){
+  if(!confirm('Put this activity back on the board?\n\nIts reports will be cleared, so it starts fresh.')) return;
+  try {
+    var r = await supa.rpc('restore_community_post', { post_id: id });
+    if(r.error){ toast('Could not restore: ' + String(r.error.message || '').slice(0, 80)); return; }
+    await loadCommunity();
+    renderCommunity();
+    toast('Activity restored');
+  } catch(e){ console.error(e); toast('Could not restore'); }
+}
 async function reportCommunity(id){
   if(!confirm('Report this activity? It will be hidden for you and the organiser will see the report.')) return;
   try {

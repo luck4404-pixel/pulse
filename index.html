@@ -276,6 +276,14 @@
   .cm-d-rm{border:1px solid var(--border);background:none;color:#ED4956;border-radius:8px;font-family:inherit;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer;}
   .cm-report{display:block;width:100%;background:none;border:none;color:#ED4956;font-family:inherit;font-size:11.5px;font-weight:600;padding:10px 0 2px;cursor:pointer;}
   .cm-tel{display:inline-block;font-size:11.5px;font-weight:600;color:var(--accent-d);text-decoration:none;margin-top:3px;}
+  .cm-removed{margin-top:18px;border:1px dashed var(--border);border-radius:12px;padding:10px 12px;background:var(--bg);}
+  .cm-removed-lbl{font-size:10.5px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .cm-removed-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);}
+  .cm-removed-row:first-of-type{border-top:none;}
+  .cm-removed-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .cm-removed-main b{font-size:12.5px;}
+  .cm-removed-main span{font-size:11px;color:var(--text-soft);line-height:1.4;}
+  .cm-restore{border:none;border-radius:8px;background:var(--accent-d);color:#fff;font-family:inherit;font-size:11.5px;font-weight:700;padding:6px 11px;cursor:pointer;flex-shrink:0;}
   .side-footer{margin-top:26px;font-size:11.5px;color:var(--text-faint);line-height:1.8;}
 
   /* ---------- Bottom nav (mobile) ---------- */
@@ -1507,6 +1515,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=75"></script>
+<script src="app.js?v=76"></script>
 </body>
 </html>
