@@ -1862,7 +1862,7 @@ function viewProfile(username){
   currentView = 'otherProfile';
   lastViewedProfile = username;
   document.getElementById('app').classList.remove('full','wide');
-  ['nav-feed','nav-explore','nav-community','nav-reels','nav-profile'].forEach(function(id){
+  ['nav-feed','nav-explore','nav-community','nav-reels','nav-profile','top-community-btn'].forEach(function(id){
     const el = document.getElementById(id);
     if(el) el.classList.remove('active');
   });
@@ -1955,13 +1955,13 @@ function showView(v){
   document.body.classList.toggle('view-settings', v === 'settings' || v === 'pro' || v === 'approvals');
   const app = document.getElementById('app');
   app.classList.remove('full','wide');
-  ['nav-feed','nav-explore','nav-community','nav-reels','nav-profile'].forEach(function(id){
+  ['nav-feed','nav-explore','nav-community','nav-reels','nav-profile','top-community-btn'].forEach(function(id){
     const el = document.getElementById(id);
     if(el) el.classList.remove('active');
   });
   if(v === 'feed'){ renderFeed(true); markNav('nav-feed'); }
   else if(v === 'explore'){ renderExplore(); markNav('nav-explore'); }
-  else if(v === 'community'){ renderCommunity(); markNav('nav-community'); loadCommunity().then(function(){ if(currentView === 'community') renderCommunity(); }); }
+  else if(v === 'community'){ renderCommunity(); markNav('nav-community'); markNav('top-community-btn'); loadCommunity().then(function(){ if(currentView === 'community') renderCommunity(); }); }
   else if(v === 'reels'){ app.classList.add('full'); renderReels(); markNav('nav-reels'); }
   else if(v === 'messages'){ app.classList.add('wide'); renderMessages(); }
   else if(v === 'notifications'){ renderNotifications(); }
