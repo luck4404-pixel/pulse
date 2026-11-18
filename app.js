@@ -4199,6 +4199,7 @@ var communityHidden = [];     // activities removed by 5+ reports (owner can res
 var faceHuman = null;
 var faceLoading = null;
 var CM_ACTS = ['Basketball', 'Cricket', 'Football', 'Running', 'Cycling', 'Study', 'Music', 'Other'];
+var CM_PAST_HOURS = 24;   // an activity stays (marked Expired) for this long after it starts
 
 function communityWhen(iso){
   try {
@@ -4240,7 +4241,7 @@ function cmSaveHidden(){
 async function loadCommunity(){
   if(communityReady === false){ communityPosts = []; communityJoins = {}; return; }
   try {
-    var until = new Date().toISOString();   // an activity stays on the board until its exact start time
+    var until = new Date(Date.now() - CM_PAST_HOURS * 3600 * 1000).toISOString();   // keep recently finished ones, marked Expired
     var q = await supa.from('community_posts')
       .select('id,user_id,activity,place,starts_at,note,max_people,place_photo,org_name,org_age,org_phone,report_count,created_at,profiles(id,username,display_name,avatar_url' + profileExtra() + ')')
       .gt('starts_at', until)
@@ -4259,10 +4260,16 @@ async function loadCommunity(){
         note: r.note || '', max: r.max_people || 0, placePhoto: r.place_photo || null,
         orgName: r.org_name || '', orgAge: r.org_age || null, orgPhone: r.org_phone || '',
         reports: r.report_count || 0,
+        expired: new Date(r.starts_at).getTime() <= Date.now(),
         dname: (r.profiles && r.profiles.display_name) || ''
       };
     });
     communityPosts = allCm.filter(function(p){ return !hid.has(p.id) && p.reports < 5; });
+    communityPosts.sort(function(x, y){
+      if(x.expired !== y.expired) return x.expired ? 1 : -1;
+      var tx = new Date(x.starts).getTime(), ty = new Date(y.starts).getTime();
+      return x.expired ? (ty - tx) : (tx - ty);
+    });
     communityHidden = allCm.filter(function(p){ return p.reports >= 5; });
     communityJoins = {};
     var ids = communityPosts.map(function(p){ return p.id; });
@@ -4316,11 +4323,18 @@ function cmCard(p){
   var joins = communityJoins[p.id] || [];
   var mine = joins.some(function(j){ return j.user_id === me.id; });
   var full = p.max > 0 && joins.length >= p.max && !mine;
-  var btn;
-  if(mine) btn = '<button class="cm-join on" onclick="event.stopPropagation();leaveCommunity(\'' + p.id + '\')">Going &#10003;</button>';
-  else if(full) btn = '<button class="cm-join full" disabled>Full</button>';
-  else btn = '<button class="cm-join" onclick="event.stopPropagation();openCommunityJoin(\'' + p.id + '\')">Join</button>';
-  return '<div class="cm-card" onclick="openCommunityDetail(\'' + p.id + '\')">'
+  var btn = '';
+  if(p.expired){
+    btn = '';                                    // joining is closed once it has started
+  } else if(mine){
+    btn = '<button class="cm-join on" onclick="event.stopPropagation();leaveCommunity(\'' + p.id + '\')">Going &#10003;</button>';
+  } else if(full){
+    btn = '<button class="cm-join full" disabled>Full</button>';
+  } else {
+    btn = '<button class="cm-join" onclick="event.stopPropagation();openCommunityJoin(\'' + p.id + '\')">Join</button>';
+  }
+  return '<div class="cm-card' + (p.expired ? ' expired' : '') + '" onclick="openCommunityDetail(\'' + p.id + '\')">'
+    + (p.expired ? '<div class="cm-veil"><span>Expired</span></div>' : '')
     + (p.placePhoto ? '<img class="cm-banner" src="' + p.placePhoto + '" alt="">' : '')
     + '<div class="cm-row">'
       + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
@@ -4338,8 +4352,9 @@ function cmCard(p){
 }
 
 function communityStrip(){
-  if(communityReady === false || !communityPosts.length) return '';
-  var top = communityPosts.slice(0, 2);
+  if(communityReady === false) return '';
+  var top = communityPosts.filter(function(p){ return !p.expired; }).slice(0, 2);
+  if(!top.length) return '';
   return '<div class="cm-strip">'
     + '<div class="cm-strip-head"><b>Happening near you</b><u onclick="showView(\'community\')">See all</u></div>'
     + '<div class="cm-strip-row">'
@@ -4437,6 +4452,7 @@ function openCommunityJoin(id){
   var p = null;
   for(var i = 0; i < communityPosts.length; i++){ if(communityPosts[i].id === id) p = communityPosts[i]; }
   if(!p) return;
+  if(p.expired){ toast('This activity has already started - you cannot join now'); return; }
   cJoinTarget = id;
   cmCamReset();
   document.getElementById('cm-join-title').textContent = 'Join ' + p.activity;
@@ -4651,6 +4667,7 @@ function openCommunityDetail(id){
       + '</div>'
     + '</div>'
     + (p.note ? '<div class="cm-note">' + esc(p.note) + '</div>' : '')
+    + (p.expired ? '<div class="cm-d-expired">This activity has expired &mdash; you can no longer join.</div>' : '')
     + '<div class="cm-d-label">Who&rsquo;s coming (' + joins.length + (p.max ? ' of ' + p.max : '') + ')</div>';
   if(!joins.length){
     body += '<div class="cm-d-empty">Nobody yet &mdash; be the first.</div>';

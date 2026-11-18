@@ -223,6 +223,15 @@
   .cm-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start;}
   .cm-head,.cm-sub,.cm-removed,.empty-note{grid-column:1 / -1;}
   .cm-card{margin-bottom:0;}
+  .cm-card.expired{position:relative;overflow:hidden;}
+  .cm-veil{position:absolute;inset:0;z-index:2;display:flex;align-items:flex-start;justify-content:flex-end;
+    padding:9px 11px;background:rgba(255,255,255,.62);pointer-events:none;}
+  html.dark .cm-veil{background:rgba(10,10,12,.58);}
+  .cm-veil span{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text-soft);background:var(--surface);border:1px solid var(--border);
+    padding:5px 11px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .cm-d-expired{font-size:12px;font-weight:600;color:var(--text-soft);background:var(--bg);
+    border:1px dashed var(--border);border-radius:9px;padding:9px 11px;margin:10px 0 2px;}
   .cm-head{display:flex;align-items:center;justify-content:space-between;margin:6px 0 2px;}
   .cm-head h2{font-size:20px;letter-spacing:-.02em;}
   .cm-sub{font-size:12.5px;color:var(--text-soft);margin-bottom:14px;}
@@ -1525,6 +1534,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=78"></script>
+<script src="app.js?v=79"></script>
 </body>
 </html>
