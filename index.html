@@ -255,6 +255,7 @@
   .cm-mini-t{font-size:12px;font-weight:700;}
   .cm-mini-m{font-size:10.5px;color:var(--text-soft);margin-top:3px;line-height:1.4;}
   .cm-mini-g{font-size:10px;color:var(--accent-d);font-weight:700;margin-top:6px;}
+  .cm-hint{font-size:11px;color:var(--text-soft);line-height:1.45;margin:-2px 0 10px;}
   .cm-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
   .cm-chip{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:999px;font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;}
   .cm-cam-box{border:1px solid var(--border);border-radius:12px;padding:11px 12px;margin:12px 0 6px;background:var(--bg);}
@@ -1324,6 +1325,7 @@
       <img id="cm-photo-prev" alt="" style="display:none;width:100%;border-radius:10px;margin-top:8px;">
       <label class="field-label">When?</label>
       <input id="cm-when" type="datetime-local">
+      <div class="cm-hint">Your activity stays on the board until this exact date and time.</div>
       <label class="field-label">Your name</label>
       <input id="cm-org-name" type="text" placeholder="Who is organising?">
       <label class="field-label">Your age</label>
@@ -1523,6 +1525,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=77"></script>
+<script src="app.js?v=78"></script>
 </body>
 </html>

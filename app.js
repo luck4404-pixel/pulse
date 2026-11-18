@@ -4240,7 +4240,7 @@ function cmSaveHidden(){
 async function loadCommunity(){
   if(communityReady === false){ communityPosts = []; communityJoins = {}; return; }
   try {
-    var until = new Date(Date.now() + 5 * 60 * 1000).toISOString();   // an activity expires 5 min before it starts
+    var until = new Date().toISOString();   // an activity stays on the board until its exact start time
     var q = await supa.from('community_posts')
       .select('id,user_id,activity,place,starts_at,note,max_people,place_photo,org_name,org_age,org_phone,report_count,created_at,profiles(id,username,display_name,avatar_url' + profileExtra() + ')')
       .gt('starts_at', until)
@@ -4409,7 +4409,7 @@ async function createCommunityPost(){
   if(!when){ toast('When is it?'); return; }
   var starts = new Date(when);
   if(isNaN(starts.getTime())){ toast('That date and time did not read right'); return; }
-  if(starts.getTime() < Date.now() + 5 * 60 * 1000){ toast('Pick a time at least 5 minutes from now'); return; }
+  if(starts.getTime() <= Date.now()){ toast('That date and time has already passed. Pick a future one.'); return; }
   var max = parseInt(maxRaw, 10);
   try {
     var placePhoto = null;
