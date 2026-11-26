@@ -1387,7 +1387,7 @@ function openShorts(startId){
 function renderShortSlide(p){
   const liked = p.likes.indexOf(me.id) !== -1;
   return '<div class="short-slide" data-post="' + p.id + '">'
-    + '<img class="short-bg" src="' + p.img + '" alt="">'
+    + '<img class="short-bg" src="' + p.img + '" alt="" decoding="async">'
     + (p.audio ? '<div class="short-vol" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()"><input type="range" min="0" max="100" value="' + Math.round(audioVolume * 100) + '" oninput="setVolume(this.value/100)" aria-label="Volume"></div>' : '')
     + (p.audio ? '<button class="short-song" id="sr-' + p.id + '" title="Play or pause song" onclick="shortAudioToggle(\'' + p.id + '\')">' + speakerIcon + '<span class="eq"><i></i><i></i><i></i></span></button>' : '')
     + shortMediaHtml(p)
@@ -4335,7 +4335,7 @@ function cmCard(p){
   }
   return '<div class="cm-card' + (p.expired ? ' expired' : '') + '" onclick="openCommunityDetail(\'' + p.id + '\')">'
     + (p.expired ? '<div class="cm-veil"><span>Expired</span></div>' : '')
-    + (p.placePhoto ? '<img class="cm-banner" src="' + p.placePhoto + '" alt="">' : '')
+    + (p.placePhoto ? '<img class="cm-banner" src="' + p.placePhoto + '" alt="" loading="lazy" decoding="async">' : '')
     + '<div class="cm-row">'
       + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
       + '<div class="cm-main">'
@@ -4647,7 +4647,7 @@ function openCommunityDetail(id){
   if(!p) return;
   var joins = communityJoins[id] || [];
   var mine = p.uid === me.id;
-  var body = (p.placePhoto ? '<img class="cm-banner tall" src="' + p.placePhoto + '" alt="">' : '')
+  var body = (p.placePhoto ? '<img class="cm-banner tall" src="' + p.placePhoto + '" alt="" loading="lazy" decoding="async">' : '')
     + '<div class="cm-d-head">'
     + '<div class="cm-ico">' + esc((p.activity || '?').trim().charAt(0).toUpperCase()) + '</div>'
     + '<div><div class="cm-title">' + esc(p.activity) + '</div>'
@@ -4879,7 +4879,14 @@ document.addEventListener('keydown', function(e){
 });
 
 /* ---------------- Realtime ---------------- */
-const scheduleRefresh = debounce(function(){ refreshData(); }, 700);
+let lastScrollAt = 0;
+window.addEventListener('scroll', function(){ lastScrollAt = Date.now(); }, { passive: true });
+
+const scheduleRefresh = debounce(function(){
+  // rebuilding the feed re-creates every image; never do it mid-scroll
+  if(Date.now() - lastScrollAt < 500){ scheduleRefresh(); return; }
+  refreshData();
+}, 700);
 const scheduleConvRefresh = debounce(function(){
   fetchConversations().then(function(c){
     conversations = c;
